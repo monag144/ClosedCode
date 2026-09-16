@@ -1,0 +1,176 @@
+=== OP98 READ-ONLY APK / PACKAGE / RUNTIME PROVENANCE ===
+UTC=2026-09-16T20:00:35Z
+RELAY_BRANCH=development/mcp-apk-control-plane-20260916
+RELAY_HEAD=735c5e44f0fc98daf81e08e7fc51d861d86a64c1
+RELAY_STATUS_BEGIN
+## development/mcp-apk-control-plane-20260916...origin/development/mcp-apk-control-plane-20260916
+RELAY_STATUS_END
+--- INSTALLED PACKAGE ---
+--- CANDIDATE APKS ---
+CANDIDATE_APK=/data/data/com.termux/files/home/GPT-Termux-Relay-standalone/android_relay/app/build/outputs/apk/debug/app-debug.apk
+e0fd063b90a6fc115c8f1f0f70a6dfc9fcea15010088100ee4504e71dfa328a1  /data/data/com.termux/files/home/GPT-Termux-Relay-standalone/android_relay/app/build/outputs/apk/debug/app-debug.apk
+package: name='com.monag.gpttermuxrelay' versionCode='9' versionName='0.5.0-mcp-shell' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.gpttermuxrelay.AgentActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/DirectorControlSmoke.apk
+f6232af69f13e6b65fb4f4a3cb30af7ca804c1c70498564757b4d265b25587f4  /storage/emulated/0/Download/DirectorControlSmoke.apk
+package: name='com.isekai.directorcontrol' versionCode='' versionName='' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.isekai.directorcontrol.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/DirectorWindow.apk
+6ef1e0246b5ff212019e1c6314130b19369e191ccefba7668f9d59a73ec8f7f9  /storage/emulated/0/Download/DirectorWindow.apk
+package: name='com.example.directorwindow' versionCode='' versionName='' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.example.directorwindow.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/GPT-Relay-Setup-Helper.apk
+42cc5db70c0e18921faf1326a559621cf20bbe63aee2c69ceb4ad25d04e708e9  /storage/emulated/0/Download/GPT-Relay-Setup-Helper.apk
+package: name='com.monag.gpttermuxrelay.helper' versionCode='2' versionName='0.2-helper' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.gpttermuxrelay.helper.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/GPT-Terminal-Relay-debug.apk
+e0fd063b90a6fc115c8f1f0f70a6dfc9fcea15010088100ee4504e71dfa328a1  /storage/emulated/0/Download/GPT-Terminal-Relay-debug.apk
+package: name='com.monag.gpttermuxrelay' versionCode='9' versionName='0.5.0-mcp-shell' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.gpttermuxrelay.AgentActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/GPT-Termux-Relay-0.4.0-runtime-capability-debug.apk
+175f36b048de3f051bbbd583a303971e9a8ca63ee1808ba4906ceef1346b1488  /storage/emulated/0/Download/GPT-Termux-Relay-0.4.0-runtime-capability-debug.apk
+package: name='com.monag.gpttermuxrelay' versionCode='8' versionName='0.4.0-runtime-capability' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.gpttermuxrelay.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/HaloCombatEndless-DevShell.apk
+e8c64caf701e81f86bc3628d4da53b0bcf770670f7782afb45c95e56c7a03112  /storage/emulated/0/Download/HaloCombatEndless-DevShell.apk
+package: name='com.monag144.halocombatendless.shell' versionCode='1' versionName='0.1-dev' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag144.halocombatendless.shell.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/IsekaiDirectorControl.apk
+dc22b3bd61480687255aa443ab8c4b1dbab2be8f5bc99acea0d2e85b73b5ff3e  /storage/emulated/0/Download/IsekaiDirectorControl.apk
+package: name='com.isekai.directorcontrol' versionCode='' versionName='' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.isekai.directorcontrol.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/MCP-Experimental-v0.1-debug.apk
+ba0268260556b66c63ce29e582a08413c90e775d804730aedd66afa2078d7301  /storage/emulated/0/Download/MCP-Experimental-v0.1-debug.apk
+package: name='com.monag.mcpexperimental' versionCode='1' versionName='0.1.0-dev' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.mcpexperimental.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/MCP-Experimental-v0.10-screen-persistence-canonical-debug.apk
+53234cd6ee0d66458ece986106b474aa90f9ab063e2bde0d04c8921ce4b41cbb  /storage/emulated/0/Download/MCP-Experimental-v0.10-screen-persistence-canonical-debug.apk
+package: name='com.monag.mcpexperimental' versionCode='10' versionName='0.10.0-beta-screen-persistence-canonical' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.mcpexperimental.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/MCP-Experimental-v0.11-declarative-parity-vector-canonical-debug.apk
+2cfbd9ea2bd35cd6ce14e5ae7336842a16f3af69825f114d5be2f7fe9056de6d  /storage/emulated/0/Download/MCP-Experimental-v0.11-declarative-parity-vector-canonical-debug.apk
+package: name='com.monag.mcpexperimental' versionCode='11' versionName='0.11.0-beta-declarative-parity-vector-canonical' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.mcpexperimental.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/MCP-Experimental-v0.2-demo-safe-debug.apk
+656d5b11524012dba17071822c42fe876d025b2ef245c6601e6dc8cebad8815e  /storage/emulated/0/Download/MCP-Experimental-v0.2-demo-safe-debug.apk
+package: name='com.monag.mcpexperimental' versionCode='2' versionName='0.2.0-dev' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.mcpexperimental.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/MCP-Experimental-v0.3-rich-ui-debug.apk
+1ea34637fb84196164c7911ecf2fcf1e75818251e8b6c8514393056b8bc6b2d6  /storage/emulated/0/Download/MCP-Experimental-v0.3-rich-ui-debug.apk
+package: name='com.monag.mcpexperimental' versionCode='3' versionName='0.3.0-dev' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.mcpexperimental.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/MCP-Experimental-v0.4-live-config-debug.apk
+00bfef3a16ee8d5c913fc70bf7e80d8301f5b01180f6bb34e7c15cefa9978ab7  /storage/emulated/0/Download/MCP-Experimental-v0.4-live-config-debug.apk
+package: name='com.monag.mcpexperimental' versionCode='4' versionName='0.4.0-dev' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.mcpexperimental.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/MCP-Experimental-v0.5-declarative-ui-debug.apk
+ce409e52a458084db84e8c4d0b67442aa2dbbb97645ba954daa9121c5da2aadf  /storage/emulated/0/Download/MCP-Experimental-v0.5-declarative-ui-debug.apk
+package: name='com.monag.mcpexperimental' versionCode='5' versionName='0.5.0-beta' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.mcpexperimental.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/MCP-Experimental-v0.6-canonical-binding-debug.apk
+a1e2e06192f7e9f969ba31d0c6b5795c477d1f2643f8ef90b7d97bd04735cdf7  /storage/emulated/0/Download/MCP-Experimental-v0.6-canonical-binding-debug.apk
+package: name='com.monag.mcpexperimental' versionCode='6' versionName='0.6.0-beta-canonical' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.mcpexperimental.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/MCP-Experimental-v0.7-icon-canonical-debug.apk
+d5aeaa7bf94574b91675bdb15f431443e119e929da2c5b7090dcab99e2a981e5  /storage/emulated/0/Download/MCP-Experimental-v0.7-icon-canonical-debug.apk
+package: name='com.monag.mcpexperimental' versionCode='7' versionName='0.7.0-beta-icon-canonical' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.mcpexperimental.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/MCP-Experimental-v0.8-rich-mutability-canonical-debug.apk
+5c0e35d8fe3cbb8e5c982a3d37af4d9b8f2768273be1af7b3b41197e9cf9bd5f  /storage/emulated/0/Download/MCP-Experimental-v0.8-rich-mutability-canonical-debug.apk
+package: name='com.monag.mcpexperimental' versionCode='8' versionName='0.8.0-beta-rich-mutability-canonical' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.mcpexperimental.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/MCP-Experimental-v0.9-persist-screen-theme-canonical-debug.apk
+f02875fa0c135c0581647657e45c97edc5b68c5726c14030e929988cff86317c  /storage/emulated/0/Download/MCP-Experimental-v0.9-persist-screen-theme-canonical-debug.apk
+package: name='com.monag.mcpexperimental' versionCode='9' versionName='0.9.0-beta-persist-screen-theme-canonical' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.mcpexperimental.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/NavStay-Dev3-v0.4-FULL-CORRECTED-debug.apk
+9ba0014dc5f3273bcb926f3b77f517220954d519c4d78d858c4eee13982ff53b  /storage/emulated/0/Download/NavStay-Dev3-v0.4-FULL-CORRECTED-debug.apk
+package: name='com.zevdev.navstay' versionCode='4' versionName='0.4-dev3' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'
+launchable-activity: name='com.zevdev.navstay.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/Outbreak-Command-Center-v0.1-debug.apk
+2963596f22a1aa1dec72fbefbe1d78144559144b8587bbf293dce5d3d864d344  /storage/emulated/0/Download/Outbreak-Command-Center-v0.1-debug.apk
+package: name='com.monag.outbreakcommandcenter' versionCode='1' versionName='0.1.0-dev' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.outbreakcommandcenter.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/Outbreak-Command-Center-v0.10-high-fidelity-nav-cards-icon-canonical-debug.apk
+cc927355f87c9d07fb885a7aa18fc24dc49f94d5e0905c2fc913e42390746c32  /storage/emulated/0/Download/Outbreak-Command-Center-v0.10-high-fidelity-nav-cards-icon-canonical-debug.apk
+package: name='com.monag.outbreakcommandcenter' versionCode='10' versionName='0.10.0-beta-hifi-nav-cards-icon-canonical' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.outbreakcommandcenter.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/Outbreak-Command-Center-v0.11-high-fidelity-stories-icon-canonical-debug.apk
+9397dd7676411a6c2a44671afdafbec8cc65ff06f93ea896177d7ac1625d500c  /storage/emulated/0/Download/Outbreak-Command-Center-v0.11-high-fidelity-stories-icon-canonical-debug.apk
+package: name='com.monag.outbreakcommandcenter' versionCode='11' versionName='0.11.0-beta-hifi-stories-icon-canonical' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.outbreakcommandcenter.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/Outbreak-Command-Center-v0.12-high-fidelity-details-icon-canonical-debug.apk
+a6d97eaa511b49594b2aef2b0b280aebbbb7b8bf67def8c2a684520f48a6e893  /storage/emulated/0/Download/Outbreak-Command-Center-v0.12-high-fidelity-details-icon-canonical-debug.apk
+package: name='com.monag.outbreakcommandcenter' versionCode='12' versionName='0.12.0-beta-hifi-details-icon-canonical' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.outbreakcommandcenter.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/Outbreak-Command-Center-v0.13-high-fidelity-facets-matrices-icon-canonical-debug.apk
+71d8876877d81d5df2030d57954ff60936a0bacebdc425d02087f8b900fd2c31  /storage/emulated/0/Download/Outbreak-Command-Center-v0.13-high-fidelity-facets-matrices-icon-canonical-debug.apk
+package: name='com.monag.outbreakcommandcenter' versionCode='13' versionName='0.13.0-beta-hifi-facets-matrices-icon-canonical' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.outbreakcommandcenter.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/Outbreak-Command-Center-v0.14-world-map-interactive-stories-canonical-debug.apk
+003cfc51715a411212d0ff8a8c42c67ab1495fbeaff28cc880486cc6da0d5e7a  /storage/emulated/0/Download/Outbreak-Command-Center-v0.14-world-map-interactive-stories-canonical-debug.apk
+package: name='com.monag.outbreakcommandcenter' versionCode='14' versionName='0.14.0-beta-world-map-interactive-stories-canonical' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.outbreakcommandcenter.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/Outbreak-Command-Center-v0.2-demo-safe-debug.apk
+946ee4c94e37d8499c4fbd77a0314828ff34e925c1fcd5d06ff511d073173867  /storage/emulated/0/Download/Outbreak-Command-Center-v0.2-demo-safe-debug.apk
+package: name='com.monag.outbreakcommandcenter' versionCode='2' versionName='0.2.0-dev' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.outbreakcommandcenter.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/Outbreak-Command-Center-v0.3-rich-ui-debug.apk
+700b08d39f1301f18b56a4ce5a0208be8678c349a7c4cebd86b084772ddd3d7b  /storage/emulated/0/Download/Outbreak-Command-Center-v0.3-rich-ui-debug.apk
+package: name='com.monag.outbreakcommandcenter' versionCode='3' versionName='0.3.0-dev' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.outbreakcommandcenter.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/Outbreak-Command-Center-v0.4-data-bound-debug.apk
+767493537e0c749aec3222c22f4e9817a2413a957869637f4072eff3cdee934f  /storage/emulated/0/Download/Outbreak-Command-Center-v0.4-data-bound-debug.apk
+package: name='com.monag.outbreakcommandcenter' versionCode='4' versionName='0.4.0-dev' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.outbreakcommandcenter.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/Outbreak-Command-Center-v0.5-canonical-data-debug.apk
+901af528d3031b80482356d25bb202cdc4b8cb5772d75d47d088d1bff53a5f15  /storage/emulated/0/Download/Outbreak-Command-Center-v0.5-canonical-data-debug.apk
+package: name='com.monag.outbreakcommandcenter' versionCode='5' versionName='0.5.0-beta-canonical' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.outbreakcommandcenter.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/Outbreak-Command-Center-v0.6-high-fidelity-canonical-debug.apk
+40823db497e294d0140392e30e028fb34f954c6f616770793bae5fcda410f9d2  /storage/emulated/0/Download/Outbreak-Command-Center-v0.6-high-fidelity-canonical-debug.apk
+package: name='com.monag.outbreakcommandcenter' versionCode='6' versionName='0.6.0-beta-hifi-canonical' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.outbreakcommandcenter.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/Outbreak-Command-Center-v0.7-high-fidelity-icon-canonical-debug.apk
+b40ecd9a7f8ba3c89601f00738a80ca9a1b13e1b48d1944cebc8c03340dc15a6  /storage/emulated/0/Download/Outbreak-Command-Center-v0.7-high-fidelity-icon-canonical-debug.apk
+package: name='com.monag.outbreakcommandcenter' versionCode='7' versionName='0.7.0-beta-hifi-icon-canonical' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.outbreakcommandcenter.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/Outbreak-Command-Center-v0.8-high-fidelity-home-icon-canonical-debug.apk
+65258769a95bbdcc3d69ea86a1032f1ebf4908d65655666d89c89dc9af8c486e  /storage/emulated/0/Download/Outbreak-Command-Center-v0.8-high-fidelity-home-icon-canonical-debug.apk
+package: name='com.monag.outbreakcommandcenter' versionCode='8' versionName='0.8.0-beta-hifi-home-icon-canonical' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.outbreakcommandcenter.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/Outbreak-Command-Center-v0.9-high-fidelity-radar-icon-canonical-debug.apk
+20b60e81ed18311792998660a543d85f9e8a6bc9143af72b9c23f36ac563d03c  /storage/emulated/0/Download/Outbreak-Command-Center-v0.9-high-fidelity-radar-icon-canonical-debug.apk
+package: name='com.monag.outbreakcommandcenter' versionCode='9' versionName='0.9.0-beta-hifi-radar-icon-canonical' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.outbreakcommandcenter.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/Sys-Intensity-v0.4.0-dev-debug.apk
+2aed4dcb95b538b325ba9282279c1ad1569fc5ab02d2ccb2aae0d4f58677345b  /storage/emulated/0/Download/Sys-Intensity-v0.4.0-dev-debug.apk
+package: name='com.monag.sysintensity' versionCode='1' versionName='0.4.0-dev' platformBuildVersionName='14' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='14'
+launchable-activity: name='com.monag.sysintensity.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/TextDock-v1.1.apk
+175f8610a6e55ba6404d3d5159eb6abf8bc7245eb12234c460e1ff28cc5d2e77  /storage/emulated/0/Download/TextDock-v1.1.apk
+package: name='app.textdock.floating' versionCode='2' versionName='1.1.0' platformBuildVersionName='UpsideDownCake' platformBuildVersionCode='34' compileSdkVersion='34' compileSdkVersionCodename='UpsideDownCake'
+launchable-activity: name='app.textdock.floating.MainActivity'  label='' icon=''
+CANDIDATE_APK=/storage/emulated/0/Download/drastic-ds-emulator-r2-6-0-4a.apk
+be180f0b6d31c9528e2df6441d995e26cbdcaf817931b79da98ae6860e37e6c5  /storage/emulated/0/Download/drastic-ds-emulator-r2-6-0-4a.apk
+package: name='com.dsemu.drastic' versionCode='109' versionName='r2.6.0.4a' platformBuildVersionName='13' platformBuildVersionCode='33' compileSdkVersion='33' compileSdkVersionCodename='13'
+launchable-activity: name='com.dsemu.drastic.DraSticActivity'  label='DraStic' icon=''
+--- SOURCE IDENTITY ---
+WORKTREE_SOCKET_BLOB=2b92fa5fb42d2ac6776bf4a5e71bb9b7ffad2fd8
+BASE_SOCKET_BLOB=db68a58f1d5885f73c2eb94c19a10f5dbcaaecaa
+EXP_SOCKET_BLOB=2b92fa5fb42d2ac6776bf4a5e71bb9b7ffad2fd8
+WORKTREE_RELAY_BLOB=35a5a589d79ddf93a2d51dbf24d88571b88df916
+BASE_RELAY_BLOB=35a5a589d79ddf93a2d51dbf24d88571b88df916
+EXP_RELAY_BLOB=35a5a589d79ddf93a2d51dbf24d88571b88df916
+--- RELEVANT PROCESSES ---
+--- TCP LISTENERS ---
+State       Recv-Q Send-Q Local Address:Port               Peer Address:Port              
+Cannot open netlink socket: Permission denied
+--- SOURCE PACKAGE IDS ---
+        applicationId 'com.monag.gpttermuxrelay'
+        versionCode 8
+        versionName '0.4.0-runtime-capability'
+EXPERIMENTAL
+        applicationId 'com.monag.gpttermuxrelay'
+        versionCode 9
+        versionName '0.5.0-mcp-shell'
