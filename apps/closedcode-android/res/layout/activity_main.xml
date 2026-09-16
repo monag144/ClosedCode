@@ -1,0 +1,561 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/cc_bg"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/topBar"
+        android:layout_width="match_parent"
+        android:layout_height="62dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingLeft="18dp"
+        android:paddingRight="18dp">
+        <TextView
+            android:id="@+id/appTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="ClosedCode"
+            android:textColor="@color/cc_text"
+            android:textSize="21sp"
+            android:textStyle="bold" />
+        <TextView
+            android:id="@+id/headerStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="34dp"
+            android:background="@drawable/bg_chip"
+            android:gravity="center"
+            android:paddingLeft="12dp"
+            android:paddingRight="12dp"
+            android:text="● connecting"
+            android:textColor="@color/cc_muted"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/content"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:id="@+id/sessionsPage"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:paddingLeft="16dp"
+            android:paddingRight="16dp">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Sessions"
+                    android:textColor="@color/cc_text"
+                    android:textSize="28sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/refreshSessions"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:gravity="center"
+                    android:text="↻"
+                    android:textColor="@color/cc_text"
+                    android:textSize="22sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/serverStrip"
+                android:layout_width="match_parent"
+                android:layout_height="70dp"
+                android:background="@drawable/bg_card"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingLeft="16dp"
+                android:paddingRight="16dp">
+                <TextView
+                    android:id="@+id/serverDot"
+                    android:layout_width="30dp"
+                    android:layout_height="wrap_content"
+                    android:text="●"
+                    android:textColor="@color/cc_muted"
+                    android:textSize="16sp" />
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="My Server"
+                        android:textColor="@color/cc_text"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/serverSubtitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="3dp"
+                        android:text="http://127.0.0.1:4096"
+                        android:textColor="@color/cc_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <TextView
+                    android:id="@+id/serverState"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Checking"
+                    android:textColor="@color/cc_muted"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="WORKSPACE"
+                android:textColor="@color/cc_muted"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+            <TextView
+                android:id="@+id/workspacePath"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:ellipsize="middle"
+                android:maxLines="1"
+                android:text="~/ClosedCode"
+                android:textColor="@color/cc_text"
+                android:textSize="14sp" />
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_marginTop="12dp"
+                android:layout_weight="1"
+                android:clipToPadding="false"
+                android:paddingBottom="82dp">
+                <LinearLayout
+                    android:id="@+id/sessionList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </ScrollView>
+
+            <TextView
+                android:id="@+id/newSessionButton"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:layout_gravity="right"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/bg_primary"
+                android:gravity="center"
+                android:text="+"
+                android:textColor="#101010"
+                android:textSize="30sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/connectionsPage"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:visibility="gone">
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:text="Connections"
+                android:textColor="@color/cc_text"
+                android:textSize="28sp"
+                android:textStyle="bold" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_card"
+                android:orientation="vertical"
+                android:padding="18dp">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="My Server"
+                        android:textColor="@color/cc_text"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/connectionBadge"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Offline"
+                        android:textColor="@color/cc_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
+                <TextView
+                    android:id="@+id/connectionUrl"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="http://127.0.0.1:4096"
+                    android:textColor="@color/cc_muted"
+                    android:textSize="14sp" />
+                <TextView
+                    android:id="@+id/connectionVersion"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="7dp"
+                    android:text="Version —"
+                    android:textColor="@color/cc_muted"
+                    android:textSize="12sp" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="PREFERENCES"
+                android:textColor="@color/cc_muted"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_card"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingLeft="16dp"
+                android:paddingRight="16dp">
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Messages per page"
+                    android:textColor="@color/cc_text"
+                    android:textSize="15sp" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="100"
+                    android:textColor="@color/cc_muted"
+                    android:textSize="14sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <ScrollView
+            android:id="@+id/settingsPage"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:padding="16dp"
+            android:visibility="gone">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:text="Settings"
+                    android:textColor="@color/cc_text"
+                    android:textSize="28sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="SECURITY"
+                    android:textColor="@color/cc_muted"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+                <Switch
+                    android:id="@+id/biometricSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="58dp"
+                    android:text="Require biometrics"
+                    android:textColor="@color/cc_text"
+                    android:textSize="15sp" />
+                <Switch
+                    android:id="@+id/hidePreviewSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="58dp"
+                    android:text="Hide app preview"
+                    android:textColor="@color/cc_text"
+                    android:textSize="15sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:text="NOTIFICATIONS"
+                    android:textColor="@color/cc_muted"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+                <Switch
+                    android:id="@+id/permissionNotifySwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="54dp"
+                    android:checked="true"
+                    android:text="Permission requests"
+                    android:textColor="@color/cc_text" />
+                <Switch
+                    android:id="@+id/questionNotifySwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="54dp"
+                    android:checked="true"
+                    android:text="Questions"
+                    android:textColor="@color/cc_text" />
+                <Switch
+                    android:id="@+id/completedNotifySwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="54dp"
+                    android:checked="true"
+                    android:text="Task completed"
+                    android:textColor="@color/cc_text" />
+                <Switch
+                    android:id="@+id/errorNotifySwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="54dp"
+                    android:checked="true"
+                    android:text="Errors"
+                    android:textColor="@color/cc_text" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:text="BACKEND"
+                    android:textColor="@color/cc_muted"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+                <EditText
+                    android:id="@+id/serverUrlInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_input"
+                    android:inputType="textUri"
+                    android:singleLine="true"
+                    android:text="http://127.0.0.1:4096"
+                    android:textColor="@color/cc_text"
+                    android:textColorHint="@color/cc_muted"
+                    android:textSize="14sp" />
+                <EditText
+                    android:id="@+id/directoryInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/bg_input"
+                    android:hint="/data/data/com.termux/files/home/ClosedCode"
+                    android:inputType="text"
+                    android:singleLine="true"
+                    android:textColor="@color/cc_text"
+                    android:textColorHint="@color/cc_muted"
+                    android:textSize="14sp" />
+                <TextView
+                    android:id="@+id/saveBackend"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_primary"
+                    android:gravity="center"
+                    android:text="Save &amp; reconnect"
+                    android:textColor="#101010"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </ScrollView>
+
+        <LinearLayout
+            android:id="@+id/chatPage"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:paddingLeft="12dp"
+            android:paddingRight="12dp"
+            android:visibility="gone">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="54dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+                <TextView
+                    android:id="@+id/backButton"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:gravity="center"
+                    android:text="‹"
+                    android:textColor="@color/cc_text"
+                    android:textSize="32sp" />
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+                    <TextView
+                        android:id="@+id/chatTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:text="Session"
+                        android:textColor="@color/cc_text"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/chatWorkspace"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="middle"
+                        android:maxLines="1"
+                        android:text="~/ClosedCode"
+                        android:textColor="@color/cc_muted"
+                        android:textSize="11sp" />
+                </LinearLayout>
+                <TextView
+                    android:id="@+id/filesButton"
+                    android:layout_width="48dp"
+                    android:layout_height="40dp"
+                    android:gravity="center"
+                    android:text="Files"
+                    android:textColor="@color/cc_muted"
+                    android:textSize="12sp" />
+                <TextView
+                    android:id="@+id/diffButton"
+                    android:layout_width="48dp"
+                    android:layout_height="40dp"
+                    android:gravity="center"
+                    android:text="Diff"
+                    android:textColor="@color/cc_muted"
+                    android:textSize="12sp" />
+            </LinearLayout>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="42dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+                <TextView
+                    android:id="@+id/modelChip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:background="@drawable/bg_chip"
+                    android:gravity="center"
+                    android:paddingLeft="12dp"
+                    android:paddingRight="12dp"
+                    android:text="Model: backend default"
+                    android:textColor="@color/cc_text"
+                    android:textSize="11sp" />
+                <TextView
+                    android:id="@+id/toolStatus"
+                    android:layout_width="0dp"
+                    android:layout_height="32dp"
+                    android:layout_marginLeft="8dp"
+                    android:layout_weight="1"
+                    android:gravity="center_vertical"
+                    android:text="Idle"
+                    android:textColor="@color/cc_muted"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <ScrollView
+                android:id="@+id/messageScroll"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:clipToPadding="false"
+                android:paddingBottom="10dp">
+                <LinearLayout
+                    android:id="@+id/messageList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingTop="8dp" />
+            </ScrollView>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="bottom"
+                android:orientation="horizontal"
+                android:paddingBottom="10dp"
+                android:paddingTop="8dp">
+                <EditText
+                    android:id="@+id/composer"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_input"
+                    android:gravity="top"
+                    android:hint="Type a message…"
+                    android:maxLines="5"
+                    android:minHeight="52dp"
+                    android:textColor="@color/cc_text"
+                    android:textColorHint="@color/cc_muted"
+                    android:textSize="15sp" />
+                <TextView
+                    android:id="@+id/sendButton"
+                    android:layout_width="52dp"
+                    android:layout_height="52dp"
+                    android:layout_marginLeft="8dp"
+                    android:background="@drawable/bg_primary"
+                    android:gravity="center"
+                    android:text="↑"
+                    android:textColor="#101010"
+                    android:textSize="24sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+    </FrameLayout>
+
+    <LinearLayout
+        android:id="@+id/bottomNav"
+        android:layout_width="match_parent"
+        android:layout_height="66dp"
+        android:background="@color/cc_surface"
+        android:gravity="center"
+        android:orientation="horizontal">
+        <TextView
+            android:id="@+id/navSessions"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="Sessions"
+            android:textColor="@color/cc_accent"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+        <TextView
+            android:id="@+id/navConnections"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="Connections"
+            android:textColor="@color/cc_muted"
+            android:textSize="13sp" />
+        <TextView
+            android:id="@+id/navSettings"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="Settings"
+            android:textColor="@color/cc_muted"
+            android:textSize="13sp" />
+    </LinearLayout>
+</LinearLayout>

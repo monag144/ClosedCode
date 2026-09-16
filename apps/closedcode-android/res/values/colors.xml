@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="cc_bg">#090A0B</color>
+    <color name="cc_surface">#111315</color>
+    <color name="cc_surface_2">#171A1D</color>
+    <color name="cc_border">#2A2E32</color>
+    <color name="cc_text">#F4F5F6</color>
+    <color name="cc_muted">#9AA0A6</color>
+    <color name="cc_accent">#D7FF3F</color>
+    <color name="cc_good">#56D364</color>
+    <color name="cc_bad">#FF6B6B</color>
+</resources>
