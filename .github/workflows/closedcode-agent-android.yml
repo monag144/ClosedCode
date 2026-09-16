@@ -9,53 +9,82 @@ on:
       - '.github/workflows/closedcode-agent-android.yml'
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
-
 jobs:
   build-apk:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
 
     steps:
-      - name: Checkout implementation branch
-        uses: actions/checkout@v4
-
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Set up Gradle 8.9
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android 34 platform
+      - name: Build and publish debug APK without marketplace actions
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
+          set -euo pipefail
 
-      - name: Build debug APK
-        shell: bash
-        run: gradle -p closedcode_agent_android --no-daemon assembleDebug
+          echo "BRANCH=$GITHUB_REF_NAME"
+          echo "SOURCE_SHA=$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "closedcode/mcp-apk-implementation-20260916"
 
-      - name: Verify package artifact
-        shell: bash
-        run: |
-          test -f closedcode_agent_android/app/build/outputs/apk/debug/app-debug.apk
-          sha256sum closedcode_agent_android/app/build/outputs/apk/debug/app-debug.apk
+          git clone --depth 1 --branch "$GITHUB_REF_NAME" \
+            "https://github.com/$GITHUB_REPOSITORY.git" source
+          cd source
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: ClosedCode-Agent-debug
-          path: closedcode_agent_android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 14
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -d closedcode_agent_android
+
+          export JAVA_HOME="${JAVA_HOME_17_X64:-${JAVA_HOME:-}}"
+          if [ -n "$JAVA_HOME" ]; then
+            export PATH="$JAVA_HOME/bin:$PATH"
+          fi
+          java -version
+
+          GRADLE_VERSION=8.9
+          GRADLE_SHA256=d725d707bfabd4dfdc958c624003b3c80accc03f7037b5122c4b1d0ef15cecab
+          GRADLE_ZIP="$RUNNER_TEMP/gradle-$GRADLE_VERSION-bin.zip"
+          GRADLE_DIR="$RUNNER_TEMP/gradle-$GRADLE_VERSION"
+
+          curl -fL --retry 3 \
+            "https://services.gradle.org/distributions/gradle-$GRADLE_VERSION-bin.zip" \
+            -o "$GRADLE_ZIP"
+          printf '%s  %s\n' "$GRADLE_SHA256" "$GRADLE_ZIP" | sha256sum --check
+          unzip -q "$GRADLE_ZIP" -d "$RUNNER_TEMP"
+
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "$SDK"
+          SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          set +o pipefail
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          set -o pipefail
+          "$SDKMANAGER" 'platforms;android-34' 'build-tools;34.0.0'
+
+          "$GRADLE_DIR/bin/gradle" \
+            -p closedcode_agent_android \
+            --no-daemon \
+            assembleDebug
+
+          APK="closedcode_agent_android/app/build/outputs/apk/debug/app-debug.apk"
+          test -f "$APK"
+
+          SHORT_SHA="${GITHUB_SHA:0:12}"
+          OUT="build-artifacts/ClosedCode-Agent-debug-$SHORT_SHA.apk"
+          HASHFILE="$OUT.sha256"
+          mkdir -p build-artifacts
+          test ! -e "$OUT"
+          test ! -e "$HASHFILE"
+          cp "$APK" "$OUT"
+          sha256sum "$OUT" | tee "$HASHFILE"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "$OUT" "$HASHFILE"
+          git commit -m "build(android): publish ClosedCode Agent debug APK [$SHORT_SHA]"
+          git remote set-url origin \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push origin "HEAD:$GITHUB_REF_NAME"
+
+          echo "APK_BUILD=GREEN"
+          echo "APK_PATH=$OUT"
+          echo "APK_INSTALL=NOT_ATTEMPTED"
