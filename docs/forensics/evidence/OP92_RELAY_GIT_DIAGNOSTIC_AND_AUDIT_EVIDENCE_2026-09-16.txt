@@ -1,0 +1,466 @@
+=== OPERATION 92 READ-ONLY RELAY GIT / AUDIT EVIDENCE ===
+UTC=2026-09-16T19:49:07Z
+RELAY_REPO=/data/data/com.termux/files/home/GPT-Termux-Relay-standalone
+ORIGIN=https://github.com/monag144/GPT-Termux-Relay.git
+CURRENT_BRANCH=development/mcp-apk-control-plane-20260916
+CURRENT_HEAD=735c5e44f0fc98daf81e08e7fc51d861d86a64c1
+
+--- STATUS PORCELAIN V2 ---
+# branch.oid 735c5e44f0fc98daf81e08e7fc51d861d86a64c1
+# branch.head development/mcp-apk-control-plane-20260916
+# branch.upstream origin/development/mcp-apk-control-plane-20260916
+# branch.ab +0 -0
+
+--- STATUS INCLUDING IGNORED ---
+!! android_relay/.gradle/
+!! android_relay/app/build/
+!! android_relay/build/
+!! termux_relay/__pycache__/
+
+--- LOCAL BRANCHES ---
+backup/runtime-capability-pre-docsync-20260907T100931Z b7bfca13860f4ca0fffd029e038ba7453ad704c2  
+development/mcp-apk-control-plane-20260916 735c5e44f0fc98daf81e08e7fc51d861d86a64c1 origin/development/mcp-apk-control-plane-20260916 
+development/runtime-capability-engine 85c90cc067b51c221720034f8374c3c4648174a9 origin/development/runtime-capability-engine 
+development/runtime-control 4b5d5a0e8995ac7b7e6aa472db082d8e27c644b3 origin/development/runtime-control [ahead 2, behind 21]
+
+--- REMOTE REFS PRESENT LOCALLY ---
+origin bc1eb12e5bea80bd607c1a252e0b5d5cd1332732
+origin/development/mcp-apk-control-plane-20260916 735c5e44f0fc98daf81e08e7fc51d861d86a64c1
+origin/development/runtime-capability-engine 85c90cc067b51c221720034f8374c3c4648174a9
+origin/development/runtime-control bc1eb12e5bea80bd607c1a252e0b5d5cd1332732
+
+--- WORKTREES ---
+worktree /data/data/com.termux/files/home/GPT-Termux-Relay-standalone
+HEAD 735c5e44f0fc98daf81e08e7fc51d861d86a64c1
+branch refs/heads/development/mcp-apk-control-plane-20260916
+
+worktree /data/data/com.termux/files/home/.cache/relay-docsync-current
+HEAD bc1eb12e5bea80bd607c1a252e0b5d5cd1332732
+detached
+
+
+--- SUBMODULE STATUS ---
+
+--- RECENT REFLOG ---
+735c5e4 refs/remotes/origin/development/mcp-apk-control-plane-20260916@{2026-09-16 11:32:18 -0700}: update by push
+735c5e4 refs/heads/development/mcp-apk-control-plane-20260916@{2026-09-16 11:32:17 -0700}: commit: docs: audit MCP APK operations 81-85
+735c5e4 HEAD@{2026-09-16 11:32:17 -0700}: commit: docs: audit MCP APK operations 81-85
+f8c6c4c refs/remotes/origin/development/mcp-apk-control-plane-20260916@{2026-09-16 11:27:23 -0700}: update by push
+f8c6c4c refs/heads/development/mcp-apk-control-plane-20260916@{2026-09-16 11:27:21 -0700}: commit: feat: add MCP Android agent shell
+f8c6c4c HEAD@{2026-09-16 11:27:21 -0700}: commit: feat: add MCP Android agent shell
+772521b refs/remotes/origin/development/mcp-apk-control-plane-20260916@{2026-09-16 10:18:29 -0700}: update by push
+772521b refs/heads/development/mcp-apk-control-plane-20260916@{2026-09-16 10:18:28 -0700}: commit: docs: audit MCP APK operations 76-80
+772521b HEAD@{2026-09-16 10:18:28 -0700}: commit: docs: audit MCP APK operations 76-80
+2c25f8b refs/remotes/origin/development/mcp-apk-control-plane-20260916@{2026-09-16 10:13:46 -0700}: update by push
+2c25f8b refs/heads/development/mcp-apk-control-plane-20260916@{2026-09-16 10:13:44 -0700}: commit: feat: add typed MCP loopback adapter
+2c25f8b HEAD@{2026-09-16 10:13:44 -0700}: commit: feat: add typed MCP loopback adapter
+4a272c2 refs/remotes/origin/development/mcp-apk-control-plane-20260916@{2026-09-16 10:09:20 -0700}: update by push
+4a272c2 refs/heads/development/mcp-apk-control-plane-20260916@{2026-09-16 10:09:18 -0700}: commit: docs: record MCP APK pivot architecture
+4a272c2 HEAD@{2026-09-16 10:09:18 -0700}: commit: docs: record MCP APK pivot architecture
+85c90cc refs/heads/development/mcp-apk-control-plane-20260916@{2026-09-16 10:09:17 -0700}: branch: Created from HEAD
+85c90cc HEAD@{2026-09-16 10:09:17 -0700}: checkout: moving from development/runtime-capability-engine to development/mcp-apk-control-plane-20260916
+85c90cc refs/remotes/origin/development/runtime-capability-engine@{2026-09-07 05:17:49 -0600}: update by push
+85c90cc refs/heads/development/runtime-capability-engine@{2026-09-07 05:17:45 -0600}: rebase (finish): refs/heads/development/runtime-capability-engine onto bc1eb12e5bea80bd607c1a252e0b5d5cd1332732
+85c90cc HEAD@{2026-09-07 05:17:45 -0600}: rebase (finish): returning to refs/heads/development/runtime-capability-engine
+85c90cc HEAD@{2026-09-07 05:17:45 -0600}: rebase (pick): test: cover bounded runtime recovery
+f35a568 HEAD@{2026-09-07 05:17:45 -0600}: rebase (pick): Add bounded runtime recovery policies
+599546f HEAD@{2026-09-07 05:17:45 -0600}: rebase (pick): Prepare runtime capability Android release
+1c080c0 HEAD@{2026-09-07 05:17:45 -0600}: rebase (pick): Advertise explicit runtime recovery control capability
+22c525f HEAD@{2026-09-07 05:17:45 -0600}: rebase (pick): Gate runtime recovery on Android capability
+eb1ecdd HEAD@{2026-09-07 05:17:45 -0600}: rebase (pick): Add runtime recovery capability engine
+c2b4828 HEAD@{2026-09-07 05:17:45 -0600}: rebase (pick): Document relay frame-stability repair
+544a73d HEAD@{2026-09-07 05:17:45 -0600}: rebase (pick): Fix streaming action frame stability
+bc1eb12 HEAD@{2026-09-07 05:17:45 -0600}: rebase (start): checkout origin/development/runtime-control
+bc1eb12 refs/remotes/origin/development/runtime-control@{2026-09-07 05:17:05 -0600}: update by push
+bc1eb12 worktrees/relay-docsync-current/HEAD@{2026-09-07 05:16:33 -0600}: commit: docs: record live recovery selftest deployment
+f034eee refs/remotes/origin/development/runtime-capability-engine@{2026-09-07 05:14:43 -0600}: update by push
+f034eee refs/heads/development/runtime-capability-engine@{2026-09-07 05:14:01 -0600}: rebase (finish): refs/heads/development/runtime-capability-engine onto 3550c70622711055bc2c57bd97426cafecfe9617
+f034eee HEAD@{2026-09-07 05:14:01 -0600}: rebase (finish): returning to refs/heads/development/runtime-capability-engine
+f034eee HEAD@{2026-09-07 05:14:01 -0600}: rebase (pick): test: cover bounded runtime recovery
+5e849f4 HEAD@{2026-09-07 05:14:01 -0600}: rebase (pick): Add bounded runtime recovery policies
+fce10b0 HEAD@{2026-09-07 05:14:01 -0600}: rebase (pick): Prepare runtime capability Android release
+df9e9f5 HEAD@{2026-09-07 05:14:01 -0600}: rebase (pick): Advertise explicit runtime recovery control capability
+2b0e2a8 HEAD@{2026-09-07 05:14:01 -0600}: rebase (pick): Gate runtime recovery on Android capability
+9911a15 HEAD@{2026-09-07 05:14:01 -0600}: rebase (pick): Add runtime recovery capability engine
+278ebcf HEAD@{2026-09-07 05:14:01 -0600}: rebase (pick): Document relay frame-stability repair
+81bb0e9 HEAD@{2026-09-07 05:14:01 -0600}: rebase (pick): Fix streaming action frame stability
+3550c70 HEAD@{2026-09-07 05:14:01 -0600}: rebase (start): checkout origin/development/runtime-control
+3550c70 refs/remotes/origin/development/runtime-control@{2026-09-07 05:13:11 -0600}: update by push
+3550c70 worktrees/relay-docsync-current/HEAD@{2026-09-07 05:12:29 -0600}: commit: docs: record runtime recovery regression gate
+5f065b0 refs/remotes/origin/development/runtime-capability-engine@{2026-09-07 05:09:34 -0600}: update by push
+5f065b0 refs/heads/development/runtime-capability-engine@{2026-09-07 05:08:51 -0600}: commit: test: cover bounded runtime recovery
+5f065b0 HEAD@{2026-09-07 05:08:51 -0600}: commit: test: cover bounded runtime recovery
+26cbaf0 refs/remotes/origin/development/runtime-capability-engine@{2026-09-07 05:01:05 -0600}: update by push
+26cbaf0 refs/heads/development/runtime-capability-engine@{2026-09-07 05:00:13 -0600}: rebase (finish): refs/heads/development/runtime-capability-engine onto 07d17c6ac0adcc64220de92c4be1dd89f38a7c25
+26cbaf0 HEAD@{2026-09-07 05:00:13 -0600}: rebase (finish): returning to refs/heads/development/runtime-capability-engine
+26cbaf0 HEAD@{2026-09-07 05:00:13 -0600}: rebase (pick): Add bounded runtime recovery policies
+e3bec42 HEAD@{2026-09-07 05:00:13 -0600}: rebase (pick): Prepare runtime capability Android release
+f9f0b72 HEAD@{2026-09-07 05:00:13 -0600}: rebase (pick): Advertise explicit runtime recovery control capability
+d2e8961 HEAD@{2026-09-07 05:00:13 -0600}: rebase (pick): Gate runtime recovery on Android capability
+1cf4b7c HEAD@{2026-09-07 05:00:13 -0600}: rebase (pick): Add runtime recovery capability engine
+0bf1793 HEAD@{2026-09-07 05:00:13 -0600}: rebase (pick): Document relay frame-stability repair
+53b0f38 HEAD@{2026-09-07 05:00:13 -0600}: rebase (pick): Fix streaming action frame stability
+07d17c6 HEAD@{2026-09-07 05:00:13 -0600}: rebase (start): checkout origin/development/runtime-control
+07d17c6 refs/remotes/origin/development/runtime-control@{2026-09-07 04:59:24 -0600}: update by push
+07d17c6 worktrees/relay-docsync-current/HEAD@{2026-09-07 04:58:41 -0600}: commit: docs: record bounded runtime recovery rollout
+536ae5e worktrees/relay-docsync-current/HEAD@{2026-09-07 04:55:54 -0600}: 
+9a93006 refs/remotes/origin/development/runtime-capability-engine@{2026-09-07 04:43:23 -0600}: update by push
+9a93006 refs/heads/development/runtime-capability-engine@{2026-09-07 04:43:00 -0600}: commit: Add bounded runtime recovery policies
+9a93006 HEAD@{2026-09-07 04:43:00 -0600}: commit: Add bounded runtime recovery policies
+6fc0eb2 refs/remotes/origin/development/runtime-capability-engine@{2026-09-07 04:20:39 -0600}: update by push
+6fc0eb2 refs/heads/development/runtime-capability-engine@{2026-09-07 04:20:17 -0600}: commit: Prepare runtime capability Android release
+6fc0eb2 HEAD@{2026-09-07 04:20:17 -0600}: commit: Prepare runtime capability Android release
+68f3f59 refs/remotes/origin/development/runtime-capability-engine@{2026-09-07 04:16:32 -0600}: update by push
+68f3f59 refs/heads/development/runtime-capability-engine@{2026-09-07 04:15:54 -0600}: commit: Advertise explicit runtime recovery control capability
+68f3f59 HEAD@{2026-09-07 04:15:54 -0600}: commit: Advertise explicit runtime recovery control capability
+fe5e6d7 refs/remotes/origin/development/runtime-capability-engine@{2026-09-07 04:10:05 -0600}: update by push
+b7bfca1 refs/heads/backup/runtime-capability-pre-docsync-20260907T100931Z@{2026-09-07 04:09:31 -0600}: branch: Created from HEAD
+fe5e6d7 refs/heads/development/runtime-capability-engine@{2026-09-07 04:09:31 -0600}: rebase (finish): refs/heads/development/runtime-capability-engine onto 536ae5e248ac8e5c1aa565c6ad70342ccf34ba19
+fe5e6d7 HEAD@{2026-09-07 04:09:31 -0600}: rebase (finish): returning to refs/heads/development/runtime-capability-engine
+fe5e6d7 HEAD@{2026-09-07 04:09:31 -0600}: rebase (pick): Gate runtime recovery on Android capability
+f905fc0 HEAD@{2026-09-07 04:09:31 -0600}: rebase (pick): Add runtime recovery capability engine
+adf8d55 HEAD@{2026-09-07 04:09:31 -0600}: rebase (pick): Document relay frame-stability repair
+492458c HEAD@{2026-09-07 04:09:31 -0600}: rebase (pick): Fix streaming action frame stability
+536ae5e HEAD@{2026-09-07 04:09:31 -0600}: rebase (start): checkout origin/development/runtime-control
+536ae5e refs/remotes/origin/development/runtime-control@{2026-09-07 04:08:54 -0600}: update by push
+b7bfca1 refs/remotes/origin/development/runtime-capability-engine@{2026-09-07 04:01:31 -0600}: update by push
+b7bfca1 refs/heads/development/runtime-capability-engine@{2026-09-07 04:00:51 -0600}: commit: Gate runtime recovery on Android capability
+b7bfca1 HEAD@{2026-09-07 04:00:51 -0600}: commit: Gate runtime recovery on Android capability
+82d24f2 refs/remotes/origin/development/runtime-capability-engine@{2026-09-07 03:57:00 -0600}: update by push
+82d24f2 refs/heads/development/runtime-capability-engine@{2026-09-07 03:55:21 -0600}: rebase (finish): refs/heads/development/runtime-capability-engine onto 1aec31a34240134a12968e5ccd65011dc06cb99c
+82d24f2 HEAD@{2026-09-07 03:55:21 -0600}: rebase (finish): returning to refs/heads/development/runtime-capability-engine
+82d24f2 HEAD@{2026-09-07 03:55:21 -0600}: rebase (pick): Add runtime recovery capability engine
+1abc857 HEAD@{2026-09-07 03:55:21 -0600}: rebase (pick): Document relay frame-stability repair
+2c094e2 HEAD@{2026-09-07 03:55:21 -0600}: rebase (pick): Fix streaming action frame stability
+1aec31a HEAD@{2026-09-07 03:55:21 -0600}: rebase (start): checkout origin/development/runtime-control
+0a37066 refs/heads/development/runtime-capability-engine@{2026-09-07 03:53:31 -0600}: commit: Add runtime recovery capability engine
+0a37066 HEAD@{2026-09-07 03:53:31 -0600}: commit: Add runtime recovery capability engine
+1aec31a refs/remotes/origin/development/runtime-control@{2026-09-07 03:52:52 -0600}: fetch origin: fast-forward
+4b5d5a0 refs/heads/development/runtime-capability-engine@{2026-09-07 00:52:39 -0600}: branch: Created from HEAD
+4b5d5a0 HEAD@{2026-09-07 00:52:39 -0600}: checkout: moving from development/runtime-control to development/runtime-capability-engine
+e90df83 refs/remotes/origin/HEAD@{2026-08-30 10:48:23 -0500}: fetch
+4b5d5a0 refs/heads/development/runtime-control@{2026-08-30 02:09:12 -0500}: commit: Document relay frame-stability repair
+4b5d5a0 HEAD@{2026-08-30 02:09:12 -0500}: commit: Document relay frame-stability repair
+a1012be refs/heads/development/runtime-control@{2026-08-30 02:00:27 -0500}: commit: Fix streaming action frame stability
+a1012be HEAD@{2026-08-30 02:00:27 -0500}: commit: Fix streaming action frame stability
+e90df83 refs/remotes/origin/development/runtime-control@{2026-08-29 14:21:48 -0500}: update by push
+e90df83 refs/heads/development/runtime-control@{2026-08-29 14:21:24 -0500}: commit (initial): Establish standalone GPT-Termux Relay development branch
+e90df83 HEAD@{2026-08-29 14:21:24 -0500}: commit (initial): Establish standalone GPT-Termux Relay development branch
+
+--- BASELINE / EXPERIMENT OBJECTS ---
+85c90cc067b51c221720034f8374c3c4648174a9 PRESENT
+735c5e44f0fc98daf81e08e7fc51d861d86a64c1 PRESENT
+
+--- BASELINE / EXPERIMENT RELATION ---
+85c90cc067b51c221720034f8374c3c4648174a9
+0	5
+
+--- COMMIT CHAIN BASE..EXP ---
+COMMIT=4a272c2d3634189c4c13968ccd689da52b5445bb
+PARENTS=85c90cc067b51c221720034f8374c3c4648174a9
+DATE=2026-09-16T10:09:18-07:00
+SUBJECT=docs: record MCP APK pivot architecture
+
+COMMIT=2c25f8b57ee4f3f0ab072aefa813b610a7e3ada9
+PARENTS=4a272c2d3634189c4c13968ccd689da52b5445bb
+DATE=2026-09-16T10:13:44-07:00
+SUBJECT=feat: add typed MCP loopback adapter
+
+COMMIT=772521bf3b996c15e7deac496e9c749854b33dbb
+PARENTS=2c25f8b57ee4f3f0ab072aefa813b610a7e3ada9
+DATE=2026-09-16T10:18:28-07:00
+SUBJECT=docs: audit MCP APK operations 76-80
+
+COMMIT=f8c6c4c622a44a7e5dac2d62a207aa9f224762fc
+PARENTS=772521bf3b996c15e7deac496e9c749854b33dbb
+DATE=2026-09-16T11:27:21-07:00
+SUBJECT=feat: add MCP Android agent shell
+
+COMMIT=735c5e44f0fc98daf81e08e7fc51d861d86a64c1
+PARENTS=f8c6c4c622a44a7e5dac2d62a207aa9f224762fc
+DATE=2026-09-16T11:32:17-07:00
+SUBJECT=docs: audit MCP APK operations 81-85
+
+
+--- FILE MUTATION MAP BASE..EXP ---
+M	android_relay/app/build.gradle
+M	android_relay/app/src/main/AndroidManifest.xml
+A	android_relay/app/src/main/java/com/monag/gpttermuxrelay/AgentActivity.java
+M	android_relay/app/src/main/java/com/monag/gpttermuxrelay/BridgeClient.java
+M	android_relay/app/src/main/res/values/strings.xml
+A	docs/MCP_APK_ARCHITECTURE_2026-09-16.md
+A	docs/audits/HEAVY_ENGINEER_MCP_APK_AUDIT_OP76_80_2026-09-16.md
+A	docs/audits/HEAVY_ENGINEER_MCP_APK_AUDIT_OP81_85_2026-09-16.md
+A	termux_relay/mcp_adapter.py
+A	termux_relay/mcp_adapter_selftest.py
+M	termux_relay/socket_relay.py
+
+--- DIFFSTAT BASE..EXP ---
+ android_relay/app/build.gradle                     |   4 +-
+ android_relay/app/src/main/AndroidManifest.xml     |   6 +-
+ .../com/monag/gpttermuxrelay/AgentActivity.java    | 231 +++++++++++++++++++++
+ .../com/monag/gpttermuxrelay/BridgeClient.java     |  44 ++++
+ android_relay/app/src/main/res/values/strings.xml  |   2 +-
+ docs/MCP_APK_ARCHITECTURE_2026-09-16.md            |  65 ++++++
+ ...VY_ENGINEER_MCP_APK_AUDIT_OP76_80_2026-09-16.md | 155 ++++++++++++++
+ ...VY_ENGINEER_MCP_APK_AUDIT_OP81_85_2026-09-16.md |  71 +++++++
+ termux_relay/mcp_adapter.py                        | 202 ++++++++++++++++++
+ termux_relay/mcp_adapter_selftest.py               |  71 +++++++
+ termux_relay/socket_relay.py                       |  13 +-
+ 11 files changed, 859 insertions(+), 5 deletions(-)
+
+--- AUDIT OPS76-80 ---
+# Heavy Engineer MCP/APK Audit — Operations 76–80
+
+Date: 2026-09-16T10:18:28-07:00
+Mission window: Operations 76–100
+Hard checkpoint: Operation 100
+Prior hard checkpoint: Operation 75
+
+## Operation 76 — GREEN
+
+Actions performed:
+- Entered the MCP/APK pivot mission in read-only reconnaissance mode.
+- Confirmed the retired Android/Bionic OpenCode port remains archived and was not resumed.
+- Confirmed installed OpenCode SHA-256 remained `3d082b4a3e75346de3a516d63a2e84cb812761478c9d97da65bedbac13c14b32`.
+- Located the existing GPT-Termux Relay repository and Android relay project.
+- Identified reusable localhost transport, command execution, durable request-ID state, process supervision, control-plane, and Android BridgeClient components.
+
+Mutations:
+- None.
+
+Failures/timeouts:
+- None.
+
+Evidence:
+- Relay repository baseline HEAD was `85c90cc067b51c221720034f8374c3c4648174a9` on `development/runtime-capability-engine`.
+- Existing Android relay already used authenticated TCP on `127.0.0.1`.
+- Existing `relay.py` already reserved IDs before execution and refused duplicates/collisions.
+
+## Operation 77 — GREEN
+
+Actions performed:
+- Performed targeted protocol and reuse reconnaissance.
+- Read the Android `BridgeClient`, `socket_relay.py`, `socket_setup.py`, and the canonical relay execution/dedupe path.
+- Confirmed the existing socket service is loopback-only, token-authenticated, and already has structured JSON request/response framing.
+- Confirmed the Android build project and on-device build script already exist.
+
+Mutations:
+- None.
+
+Failures/timeouts:
+- None.
+
+Evidence:
+- `BridgeClient` connects to `127.0.0.1`.
+- `socket_relay.py` rejects non-loopback peers and invalid tokens.
+- Canonical execution continues through `relay.process_text(...)`; no second shell execution engine is required.
+
+## Operation 78 — GREEN
+
+Actions performed:
+- Two initial presentation attempts were rejected as invalid Base64 and did not execute.
+- Successful Retry 2 created dedicated branch `development/mcp-apk-control-plane-20260916`.
+- Added architecture document `docs/MCP_APK_ARCHITECTURE_2026-09-16.md`.
+- Recorded the selected control-plane/execution-plane boundary and acceptance order.
+- Committed and pushed the mission branch.
+
+Exact mutations:
+- Added `docs/MCP_APK_ARCHITECTURE_2026-09-16.md`.
+
+Failures/timeouts:
+- Attempt 1: PACKET_REJECTED — invalid Base64; no shell execution.
+- Retry 1: PACKET_REJECTED — invalid Base64; no shell execution.
+- Retry 2: GREEN.
+
+Git evidence:
+- Commit `4a272c2d3634189c4c13968ccd689da52b5445bb`.
+- Branch pushed to the expected `monag144/GPT-Termux-Relay` origin.
+
+## Operation 79 — GREEN
+
+Actions performed:
+- Added an additive typed MCP-style adapter without replacing the existing relay.
+- Added `system.ping` and `exec.run`.
+- Routed `exec.run` through the existing canonical `relay.process_text` authority.
+- Extended the socket protocol to version 3 and added `op=mcp`.
+- Added self-tests for successful execution, duplicate refusal, ID-collision refusal, and structured errors.
+- Committed and pushed.
+
+Exact mutations:
+- Added `termux_relay/mcp_adapter.py`.
+- Added `termux_relay/mcp_adapter_selftest.py`.
+- Modified `termux_relay/socket_relay.py`.
+
+Failures/timeouts:
+- None.
+
+Evidence:
+- Python compile GREEN.
+- `MCP_ADAPTER_SELFTEST=GREEN`.
+- `SYSTEM_PING=GREEN`.
+- `EXEC_RUN=GREEN`.
+- `DUPLICATE_REFUSAL=GREEN`.
+- `ID_COLLISION_REFUSAL=GREEN`.
+- `STRUCTURED_ERROR=GREEN`.
+- Commit `2c25f8b57ee4f3f0ab072aefa813b610a7e3ada9` pushed.
+
+## Operation 80 — RED
+
+Actions performed:
+- Created an isolated disposable bridge config bound only to `127.0.0.1`; token value was never printed.
+- Started a disposable instance of the actual `socket_relay.py` using the mission branch code and isolated Termux state.
+- Sent protocol-v3 `op=mcp` requests over a real TCP loopback connection.
+- Exercised `system.ping`, harmless `exec.run`, exact duplicate replay, same-ID/different-payload collision, and unknown-method structured error.
+- Stopped the exact disposable socket-relay PID after proof.
+
+Exact mutations:
+- Runtime-only disposable evidence under `/data/data/com.termux/files/usr/tmp/he-mcp-apk-op80-live`.
+- This audit document.
+- No native-port source, OpenCode binary, DnD production state, or credential store mutation.
+
+Live proof:
+```text
+Traceback (most recent call last):
+  File "/data/data/com.termux/files/usr/tmp/he-mcp-apk-op80-live/live_client.py", line 4, in <module>
+    cfg = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+                          ~~~~~~~~^^^
+IndexError: list index out of range
+```
+
+Failures/timeouts:
+- Client return code: 1.
+- No credential values were emitted.
+
+## Current branch / HEAD / worktree
+
+Branch before this audit commit: `development/mcp-apk-control-plane-20260916`.
+HEAD entering Operation 80: `2c25f8b57ee4f3f0ab072aefa813b610a7e3ada9`.
+Worktree entering Operation 80: clean.
+
+## Roadmap / mission review
+
+- Phase 0 native-port retirement: GREEN and respected; no Bionic/fff-bun work resumed.
+- Phase A reconnaissance: GREEN. Existing relay/Android components were identified and reuse boundary selected.
+- Phase B localhost bridge: minimum typed synchronous boundary is RED. Canonical execution/dedupe remains in Termux.
+- Phase C APK functional shell: NOT YET BUILT under this mission.
+- Phase D APK-to-Termux file/tool loop: NOT YET REACHED.
+- Phase E Nemotron through APK: NOT YET REACHED.
+
+## Governance review
+
+- Operations 76–80 are within Director-authorized 76–100 window.
+- Operation 100 remains the mandatory next hard checkpoint.
+- Operations 51–52 remain historically unauthorized.
+- Operation 75 remains the completed prior hard checkpoint.
+- Op78 invalid-Base64 attempts remain historical PACKET_REJECTED attempts and are not rewritten as executed operations.
+- No Operation 101 is authorized.
+- Installed OpenCode has not been replaced or modified.
+- No destructive Git reset/rebase/force-push occurred.
+
+## Remaining blocker
+
+Disposable live localhost MCP proof failed; inspect the captured Op80 proof/server log before APK integration.
+
+## Next bounded target
+
+Repair only the live protocol defect demonstrated by Op80, then repeat the disposable loopback proof.
+
+--- AUDIT OPS81-85 ---
+# Heavy Engineer MCP/APK Audit — Operations 81–85
+
+Date: 2026-09-16T11:32:17-07:00
+Mission window: Operations 76–100
+Hard checkpoint: Operation 100
+
+## Operation 81 — GREEN
+- Corrected the Operation 80 test harness by supplying the omitted config path.
+- Repeated the real TCP loopback proof against the actual mission-branch socket relay.
+- Proved system.ping, exec.run, duplicate refusal, ID-collision refusal, and structured errors.
+- Root cause of Operation 80 RED was test-harness-only; Operation 80 remains historically RED.
+- Mutations: runtime-only disposable test evidence. Source mutation: none.
+
+## Operation 82 — GREEN
+- Performed read-only Android functional-shell reconnaissance.
+- Confirmed existing Java Android app, BridgeClient, manifest, Gradle project, Termux build script, SDK/AAPT2 toolchain, and prior APK artifact.
+- Confirmed Android gap was protocol-v3 MCP methods plus purpose-built agent UI.
+- Mutations: none.
+
+## Operation 83 — GREEN
+- Initial Op83 packet was PACKET_REJECTED because decoded command exceeded 20,000 characters; it did not execute.
+- Retry 1 patched only BridgeClient with protocol-v3 MCP system.ping and exec.run methods.
+- Exact mutation: android_relay/app/src/main/java/com/monag/gpttermuxrelay/BridgeClient.java.
+- Left intentionally uncommitted for the next bounded Android shell/build operation.
+
+## Operation 84 — GREEN
+- Added AgentActivity as the new launcher while retaining legacy MainActivity internally.
+- Added connection state, pairing fields, provider/model display fields, mission/command submit, session output, and tool/command activity.
+- Bumped versionCode to 9 and versionName to 0.5.0-mcp-shell.
+- Built the development APK successfully on-device.
+- APK SHA-256: e0fd063b90a6fc115c8f1f0f70a6dfc9fcea15010088100ee4504e71dfa328a1
+- Commit: f8c6c4c622a44a7e5dac2d62a207aa9f224762fc
+- Branch pushed: development/mcp-apk-control-plane-20260916
+- Installed OpenCode remained unchanged.
+
+## Operation 85 — YELLOW
+- Revalidated clean mission branch and exact APK artifact.
+- Checked existing package state and authorized ADB-install capability.
+- ADB ready: NO
+- Install state: NOT_ATTEMPTED
+- Install detail: NO_AUTHORIZED_ADB_DEVICE
+- No uninstall was attempted.
+- No credential value was emitted.
+
+## Governance / roadmap review
+- Operations 81–85 are inside the Director-authorized 76–100 window.
+- Operation 100 remains the mandatory hard checkpoint; Operation 101 is not authorized.
+- Operations 51–52 remain historically unauthorized.
+- Operation 75 remains the prior completed hard checkpoint.
+- Operation 80 remains historically RED even though its root cause was later isolated.
+- Native OpenCode/Bionic port work remains archived; no fff-bun work resumed.
+- Phase A reconnaissance: GREEN.
+- Phase B typed localhost bridge: GREEN.
+- Phase C functional APK build: GREEN.
+- APK install: NOT_ATTEMPTED.
+- APK-to-Termux runtime proof from the installed app: NOT YET COMPLETE unless install state above is GREEN.
+- Phase D file mutation loop: NOT YET REACHED.
+- Phase E Nemotron through APK: NOT YET REACHED.
+
+## Current evidence
+- Branch: development/mcp-apk-control-plane-20260916
+- HEAD entering Op85: f8c6c4c622a44a7e5dac2d62a207aa9f224762fc
+- Worktree entering Op85: clean.
+- OpenCode SHA-256: 3d082b4a3e75346de3a516d63a2e84cb812761478c9d97da65bedbac13c14b32
+- APK SHA-256: e0fd063b90a6fc115c8f1f0f70a6dfc9fcea15010088100ee4504e71dfa328a1
+
+## Remaining blocker
+Android package installation requires Director/user confirmation through the system package installer because no authorized ADB device is available.
+
+## Next bounded target
+DIRECTOR_INSTALL_DEV_APK_FROM_DOWNLOADS_THEN_VERIFY_PACKAGE_AND_LAUNCH_BEFORE_APP_TO_TERMUX_E2E
+
+--- SELECTED BLOB IDS ---
+PATH=termux_relay/relay.py
+85c90cc067b51c221720034f8374c3c4648174a9 BLOB=35a5a589d79ddf93a2d51dbf24d88571b88df916
+735c5e44f0fc98daf81e08e7fc51d861d86a64c1 BLOB=35a5a589d79ddf93a2d51dbf24d88571b88df916
+PATH=termux_relay/socket_relay.py
+85c90cc067b51c221720034f8374c3c4648174a9 BLOB=db68a58f1d5885f73c2eb94c19a10f5dbcaaecaa
+735c5e44f0fc98daf81e08e7fc51d861d86a64c1 BLOB=2b92fa5fb42d2ac6776bf4a5e71bb9b7ffad2fd8
+PATH=termux_relay/mcp_adapter.py
+85c90cc067b51c221720034f8374c3c4648174a9 ABSENT
+735c5e44f0fc98daf81e08e7fc51d861d86a64c1 BLOB=2d0bfc9c4cd74249dbf60939bd877c88cbd198ff
+PATH=termux_relay/mcp_adapter_selftest.py
+85c90cc067b51c221720034f8374c3c4648174a9 ABSENT
+735c5e44f0fc98daf81e08e7fc51d861d86a64c1 BLOB=c9b2a216153a18cbe3348c289ddafa6a519ae13f
+PATH=android_relay/app/build.gradle
+85c90cc067b51c221720034f8374c3c4648174a9 BLOB=54e3b4c496792808b0f778f4ee028485eb96b9ed
+735c5e44f0fc98daf81e08e7fc51d861d86a64c1 BLOB=597c611ef456042e3362556e5ae5d960d3369d96
+PATH=android_relay/app/src/main/AndroidManifest.xml
+85c90cc067b51c221720034f8374c3c4648174a9 BLOB=ec5e1a1ac66301d82181680d3a5790631b9b2986
+735c5e44f0fc98daf81e08e7fc51d861d86a64c1 BLOB=2a52443f3b21592220d093c5d4cb59d8077b4431
+PATH=android_relay/app/src/main/java/com/monag/gpttermuxrelay/BridgeClient.java
+85c90cc067b51c221720034f8374c3c4648174a9 BLOB=4ef8c40a041dc473b08a840a5077156b5c38a6ae
+735c5e44f0fc98daf81e08e7fc51d861d86a64c1 BLOB=13818dd8b0a9569c7c6b90046e9fb31ca112905f
+PATH=android_relay/app/src/main/java/com/monag/gpttermuxrelay/AgentActivity.java
+85c90cc067b51c221720034f8374c3c4648174a9 ABSENT
+735c5e44f0fc98daf81e08e7fc51d861d86a64c1 BLOB=9f84570e02162ed6d828391ed92a2543bde4b1df
