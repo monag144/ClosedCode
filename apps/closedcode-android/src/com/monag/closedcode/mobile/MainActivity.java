@@ -3,6 +3,8 @@ package com.monag.closedcode.mobile;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.SharedPreferences;
+import android.content.Intent;
+import android.speech.RecognizerIntent;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.text.TextUtils;
@@ -53,6 +55,9 @@ public final class MainActivity extends Activity {
     private TextView chatTitle;
     private TextView chatWorkspace;
     private TextView modelChip;
+    private TextView agentChip;
+    private TextView effortChip;
+    private TextView voiceButton;
     private TextView toolStatus;
     private EditText composer;
     private EditText serverUrlInput;
@@ -74,6 +79,9 @@ public final class MainActivity extends Activity {
     private String lastModelLabel = "backend default";
     private String selectedProviderId;
     private String selectedModelId;
+    private String selectedAgent = "build";
+    private String selectedVariant;
+    private static final int VOICE_REQUEST_CODE = 413;
     private final List<ProviderChoice> providerChoices = new ArrayList<>();
 
     private static final class ModelChoice {
@@ -110,6 +118,10 @@ public final class MainActivity extends Activity {
 
         bindViews();
         bindActions();
+        selectedAgent = prefs.getString("selectedAgent", "build");
+        String savedVariant = prefs.getString("selectedVariant", "auto");
+        selectedVariant = "auto".equals(savedVariant) ? null : savedVariant;
+        updateComposerControlLabels();
         serverUrlInput.setText(url);
         directoryInput.setText(directory);
         workspacePath.setText(shortPath(directory));
@@ -144,6 +156,9 @@ public final class MainActivity extends Activity {
         chatTitle = findViewById(R.id.chatTitle);
         chatWorkspace = findViewById(R.id.chatWorkspace);
         modelChip = findViewById(R.id.modelChip);
+        agentChip = findViewById(R.id.agentChip);
+        effortChip = findViewById(R.id.effortChip);
+        voiceButton = findViewById(R.id.voiceButton);
         toolStatus = findViewById(R.id.toolStatus);
         composer = findViewById(R.id.composer);
         serverUrlInput = findViewById(R.id.serverUrlInput);
@@ -169,6 +184,9 @@ public final class MainActivity extends Activity {
         findViewById(R.id.saveBackend).setOnClickListener(v -> saveBackend());
         findViewById(R.id.serverStrip).setOnClickListener(v -> showPage("connections"));
         modelChip.setOnClickListener(v -> showProviderPicker());
+        agentChip.setOnClickListener(v -> showAgentPicker());
+        effortChip.setOnClickListener(v -> showEffortPicker());
+        voiceButton.setOnClickListener(v -> startVoiceInput());
         bindToggle(R.id.biometricRow, biometricSwitch, "requireBiometrics", false, false);
         bindToggle(R.id.hidePreviewRow, hidePreviewSwitch, "hideAppPreview", false, true);
         bindToggle(R.id.permissionNotifyRow, permissionNotifySwitch, "notifyPermissions", true, false);
@@ -401,6 +419,70 @@ public final class MainActivity extends Activity {
                     .putString("selectedModelId", selectedModelId)
                     .apply();
         }
+    }
+
+    private void showAgentPicker() {
+        final String[] labels = {"Build", "Plan"};
+        int selected = "plan".equals(selectedAgent) ? 1 : 0;
+        new AlertDialog.Builder(this)
+                .setTitle("Agent mode")
+                .setSingleChoiceItems(labels, selected, (dialog, which) -> {
+                    selectedAgent = which == 1 ? "plan" : "build";
+                    prefs.edit().putString("selectedAgent", selectedAgent).apply();
+                    updateComposerControlLabels();
+                    dialog.dismiss();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void showEffortPicker() {
+        final String[] labels = {"Auto", "Low", "Medium", "High"};
+        String current = selectedVariant == null ? "auto" : selectedVariant;
+        int selected = "low".equals(current) ? 1 : "medium".equals(current) ? 2 : "high".equals(current) ? 3 : 0;
+        new AlertDialog.Builder(this)
+                .setTitle("Reasoning effort")
+                .setSingleChoiceItems(labels, selected, (dialog, which) -> {
+                    String value = which == 1 ? "low" : which == 2 ? "medium" : which == 3 ? "high" : "auto";
+                    selectedVariant = "auto".equals(value) ? null : value;
+                    prefs.edit().putString("selectedVariant", value).apply();
+                    updateComposerControlLabels();
+                    dialog.dismiss();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void updateComposerControlLabels() {
+        if (agentChip != null) agentChip.setText("plan".equals(selectedAgent) ? "Plan" : "Build");
+        if (effortChip != null) {
+            String value = selectedVariant == null ? "Auto" : selectedVariant.substring(0, 1).toUpperCase() + selectedVariant.substring(1);
+            effortChip.setText("Reason: " + value);
+        }
+    }
+
+    private void startVoiceInput() {
+        try {
+            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to ClosedCode");
+            startActivityForResult(intent, VOICE_REQUEST_CODE);
+        } catch (Exception e) {
+            toast("Voice input unavailable: " + e.getMessage());
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != VOICE_REQUEST_CODE || resultCode != RESULT_OK || data == null) return;
+        ArrayList<String> results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+        if (results == null || results.isEmpty()) return;
+        String spoken = results.get(0).trim();
+        if (spoken.isEmpty()) return;
+        String existing = composer.getText().toString();
+        composer.setText(existing.isEmpty() ? spoken : existing + " " + spoken);
+        composer.setSelection(composer.length());
     }
 
     private ProviderChoice findProvider(String id) {
@@ -672,7 +754,7 @@ public final class MainActivity extends Activity {
         addMessageBubble("user", text);
         toolStatus.setText("Sending…");
         final String expectedId = currentSessionId;
-        api.promptAsync(expectedId, directory, text, selectedProviderId, selectedModelId, new ClosedCodeApi.Callback() {
+        api.promptAsync(expectedId, directory, text, selectedProviderId, selectedModelId, selectedAgent, selectedVariant, new ClosedCodeApi.Callback() {
             @Override public void success(String body) {
                 if (!expectedId.equals(currentSessionId)) return;
                 toolStatus.setText("Running…");
