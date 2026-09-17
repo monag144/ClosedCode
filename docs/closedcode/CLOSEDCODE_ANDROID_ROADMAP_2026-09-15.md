@@ -1,3 +1,10 @@
+> **STATUS: CLOSED / SUPERSEDED**
+>
+> Closed: 2026-09-17
+> Superseded by: `docs/closedcode/CLOSEDCODE_DELIVERY_AND_STABILIZATION_ROADMAP_2026-09-17.md`
+>
+> Historical record only; no longer an active implementation roadmap.
+
 # ClosedCode Android Roadmap — 2026-09-15
 
 ## Phase 0 — Fork foundation
