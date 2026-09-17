@@ -1,6 +1,6 @@
 # ClosedCode Delivery and Stabilization Roadmap — 2026-09-17
 
-**Status:** ACTIVE / AUTHORITATIVE IMPLEMENTATION ROADMAP
+**Timestamp:** 2026-09-17
 
 ## Architecture
 
@@ -12,7 +12,7 @@ GPT-Termux-Relay is protected infrastructure. It must not be used as ClosedCode 
 
 Heavy Engineer 7 begins by closing the interrupted Heavy Engineer 6 governance cycle.
 
-Current reconstructed state:
+Reconstructed state at 2026-09-17:
 - Op146 — RED / Relay connection refused.
 - Op147 — GREEN / heartbeat.
 - Op148 — GREEN / read-only inspection.
@@ -133,7 +133,7 @@ If a Relay operation may have mutated state but its terminal result is lost beca
 3. Do not blindly retry the mutating command.
 4. The next Relay operation must be read-only state reconstruction.
 5. When connectivity is uncertain, classify DNS, HTTPS, Git, Relay, and backend layers independently using the applicable diagnostic procedure.
-6. Retry or continue only after actual state is known, under a new operation number.
+6. Retry or continue only after actual state is known, under a different operation number.
 7. If the uncertainty occurs at an audit/review/checkpoint boundary, governance recovery rules take precedence.
 8. Never expose secrets while collecting diagnostics.
 
