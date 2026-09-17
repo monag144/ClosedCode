@@ -29,7 +29,7 @@ The durable GitHub evidence through Op145 remains valid:
 
 ## Post-Op145 reconstruction
 
-The best currently supported reconstruction is:
+The best supported reconstruction is:
 
 - **Op146 — RED / ACTION_FAILED.** A Relay action encountered `ECONNREFUSED` to `127.0.0.1:8765`; the intended ClosedCode command did not reach Termux. No ClosedCode mutation was proven.
 - **Op147 — GREEN.** A minimal Relay heartbeat succeeded after the listener/watchdog was restarted. No source/Git/runtime/package/shared-storage mutation was reported.
@@ -37,7 +37,7 @@ The best currently supported reconstruction is:
 - **Op149 — DIRECTOR-REPORTED AS REACHED / STATUS NOT PROVEN.** Screenshots show implementation/source work was underway and later Relay/Termux connectivity failure occurred, but the final Relay result packet is unavailable. Op149 must therefore remain **UNKNOWN/RED-UNPROVEN with possible partial mutation** until direct device/Git/filesystem evidence reconstructs what actually landed.
 - **Op150 — NOT PROVEN / PRESUMED NOT COMPLETED.** No Audit 146–150 or Op150 hard-checkpoint report exists. Nothing in the available evidence justifies treating the mandatory checkpoint as completed.
 
-This reconstruction must not be silently upgraded later. If stronger direct evidence is recovered, it should be appended as a new dated forensic record while preserving this incident report.
+This reconstruction must not be silently upgraded later. If stronger direct evidence is recovered, it should be appended as a separate dated forensic record while preserving this incident report.
 
 ## Screenshot evidence supplied by the Director
 
@@ -59,7 +59,7 @@ Accordingly:
 - the next Relay operation should be treated as **Op150 governance recovery**, not ordinary feature continuation;
 - Op150 should be read-only and reconstruct exact branch, HEAD, worktree, staged/unstaged/untracked files, diffs, relevant source hashes, build metadata, APK outputs, backend/runtime state, and any partial mutation attributable to Op149;
 - the resulting Audit 146–150 must preserve uncertainty honestly and must not fabricate evidence for missing operations;
-- after the recovered Op150 checkpoint is surfaced, the hard stop remains active pending fresh Director authorization for Op151+.
+- after the recovered Op150 checkpoint is surfaced, the hard stop remains in force pending fresh Director authorization for Op151+.
 
 ## Protected infrastructure
 
@@ -68,3 +68,7 @@ No evidence from this incident establishes a GPT-Termux-Relay source/config/pack
 ## Incident conclusion
 
 **RED / GOVERNANCE INCOMPLETE.** The session reached the final pre-checkpoint window but crashed repeatedly before a trustworthy Audit 146–150 and Op150 hard checkpoint were produced. Op149 is not sufficiently proven, and Op150 must not be treated as completed. The incident is preserved so later recovery can reconstruct the actual device state without rewriting the interruption into a successful checkpoint.
+
+
+---
+**Record boundary:** 2026-09-17
