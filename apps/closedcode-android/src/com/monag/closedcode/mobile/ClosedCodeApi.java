@@ -100,6 +100,39 @@ public final class ClosedCodeApi {
         async("GET", "/file/content?" + routing(directory) + "&path=" + enc(path), null, cb);
     }
 
+    public void listPermissions(String directory, Callback cb) {
+        async("GET", "/permission?" + routing(directory), null, cb);
+    }
+
+    public void replyPermission(String requestId, String directory, String reply, String message, Callback cb) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("reply", reply);
+            if (message != null && !message.trim().isEmpty()) body.put("message", message.trim());
+            async("POST", "/permission/" + enc(requestId) + "/reply?" + routing(directory), body.toString(), cb);
+        } catch (Exception e) {
+            main.post(() -> cb.failure(e.toString()));
+        }
+    }
+
+    public void listQuestions(String directory, Callback cb) {
+        async("GET", "/question?" + routing(directory), null, cb);
+    }
+
+    public void replyQuestion(String requestId, String directory, JSONArray answers, Callback cb) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("answers", answers);
+            async("POST", "/question/" + enc(requestId) + "/reply?" + routing(directory), body.toString(), cb);
+        } catch (Exception e) {
+            main.post(() -> cb.failure(e.toString()));
+        }
+    }
+
+    public void rejectQuestion(String requestId, String directory, Callback cb) {
+        async("POST", "/question/" + enc(requestId) + "/reject?" + routing(directory), null, cb);
+    }
+
     public void startEvents(String directory, EventListener listener) {
         stopEvents();
         eventLoop = true;
