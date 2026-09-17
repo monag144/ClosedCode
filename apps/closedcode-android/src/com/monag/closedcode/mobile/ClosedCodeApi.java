@@ -78,6 +78,10 @@ public final class ClosedCodeApi {
     }
 
     public void promptAsync(String sessionId, String directory, String text, String providerId, String modelId, Callback cb) {
+        promptAsync(sessionId, directory, text, providerId, modelId, null, null, cb);
+    }
+
+    public void promptAsync(String sessionId, String directory, String text, String providerId, String modelId, String agent, String variant, Callback cb) {
         try {
             JSONObject body = new JSONObject();
             JSONArray parts = new JSONArray();
@@ -92,6 +96,8 @@ public final class ClosedCodeApi {
                 model.put("modelID", modelId);
                 body.put("model", model);
             }
+            if (agent != null && !agent.trim().isEmpty()) body.put("agent", agent.trim());
+            if (variant != null && !variant.trim().isEmpty()) body.put("variant", variant.trim());
             async("POST", "/session/" + enc(sessionId) + "/prompt_async?" + routing(directory), body.toString(), cb);
         } catch (Exception e) {
             main.post(() -> cb.failure(e.toString()));
