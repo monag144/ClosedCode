@@ -3,14 +3,14 @@ set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
 BUILD="$ROOT/build"
-OUT_NAME="ClosedCode-cleanroom-debug.apk"
+OUT_NAME="ClosedCode-cleanroom-v0.1.1-debug.apk"
 
 find_sdk() {
   if [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME/platforms" ]; then
     printf '%s\n' "$ANDROID_HOME"
     return
   fi
-  for candidate in "$HOME"/lib/android-sdk-* "$HOME"/Android/Sdk "$PREFIX"/share/android-sdk; do
+  for candidate in "$HOME"/lib/android-sdk-* "$HOME/Android/Sdk" "$PREFIX"/share/android-sdk; do
     [ -d "$candidate/platforms" ] || continue
     printf '%s\n' "$candidate"
     return
@@ -40,9 +40,11 @@ AAPT2="$(command -v aapt2 2>/dev/null || true)"
 [ -n "$AAPT2" ] || AAPT2="$BUILD_TOOLS/aapt2"
 D8="$BUILD_TOOLS/d8"
 APKSIGNER="$BUILD_TOOLS/apksigner"
-ZIPALIGN="$BUILD_TOOLS/zipalign"
+ZIPALIGN="$(command -v zipalign 2>/dev/null || true)"
+[ -n "$ZIPALIGN" ] || ZIPALIGN="$BUILD_TOOLS/zipalign"
+BASH_BIN="$(command -v bash 2>/dev/null || true)"
 
-for tool in "$AAPT2" "$D8" "$APKSIGNER" "$ZIPALIGN"; do
+for tool in "$AAPT2" "$D8" "$APKSIGNER" "$ZIPALIGN" "$BASH_BIN"; do
   if [ ! -x "$tool" ]; then
     echo "BUILD_STATUS=RED"
     echo "REASON=MISSING_TOOL:$tool"
@@ -65,8 +67,8 @@ set -- "$BUILD"/compiled/*.flat
   --java "$BUILD/gen" \
   --min-sdk-version 26 \
   --target-sdk-version 34 \
-  --version-code 2 \
-  --version-name "0.1.0-cleanroom" \
+  --version-code 3 \
+  --version-name "0.1.1-cleanroom" \
   --auto-add-overlay \
   "$@"
 
@@ -83,26 +85,31 @@ jar cf "$BUILD/classes.jar" -C "$BUILD/classes" .
 "$D8" --min-api 26 --lib "$ANDROID_JAR" --output "$BUILD/dex" "$BUILD/classes.jar"
 
 cp "$BUILD/resources.apk" "$BUILD/unsigned.apk"
-(
-  cd "$BUILD/dex"
-  zip -q -j "$BUILD/unsigned.apk" ./*.dex
-)
+for dex in "$BUILD"/dex/*.dex; do
+  [ -f "$dex" ] || continue
+  jar uf "$BUILD/unsigned.apk" -C "$BUILD/dex" "$(basename "$dex")"
+done
 
 "$ZIPALIGN" -f 4 "$BUILD/unsigned.apk" "$BUILD/aligned.apk"
 
-KEYSTORE="$BUILD/closedcode-debug.keystore"
-keytool -genkeypair \
-  -keystore "$KEYSTORE" \
-  -storepass android \
-  -keypass android \
-  -alias closedcode \
-  -dname "CN=ClosedCode Cleanroom Debug,O=ClosedCode" \
-  -keyalg RSA \
-  -keysize 2048 \
-  -validity 10000 \
-  >/dev/null 2>&1
+KEY_DIR="$ROOT/.debug"
+KEYSTORE="$KEY_DIR/closedcode-debug.keystore"
+mkdir -p "$KEY_DIR"
+if [ ! -f "$KEYSTORE" ]; then
+  keytool -genkeypair \
+    -keystore "$KEYSTORE" \
+    -storepass android \
+    -keypass android \
+    -alias closedcode \
+    -dname "CN=ClosedCode Cleanroom Debug,O=ClosedCode" \
+    -keyalg RSA \
+    -keysize 2048 \
+    -validity 10000 \
+    >/dev/null 2>&1
+  chmod 600 "$KEYSTORE"
+fi
 
-"$APKSIGNER" sign \
+"$BASH_BIN" "$APKSIGNER" sign \
   --ks "$KEYSTORE" \
   --ks-key-alias closedcode \
   --ks-pass pass:android \
@@ -110,7 +117,7 @@ keytool -genkeypair \
   --out "$BUILD/$OUT_NAME" \
   "$BUILD/aligned.apk"
 
-"$APKSIGNER" verify --verbose "$BUILD/$OUT_NAME" >/dev/null
+"$BASH_BIN" "$APKSIGNER" verify --verbose "$BUILD/$OUT_NAME" >/dev/null
 
 SHARED_OUT="/sdcard/Download/$OUT_NAME"
 cp "$BUILD/$OUT_NAME" "$SHARED_OUT"
@@ -120,8 +127,9 @@ echo "SDK=$SDK"
 echo "ANDROID_JAR=$ANDROID_JAR"
 echo "BUILD_TOOLS=$BUILD_TOOLS"
 echo "AAPT2=$AAPT2"
+echo "ZIPALIGN=$ZIPALIGN"
 echo "PACKAGE=com.monag.closedcode.mobile"
-echo "VERSION_NAME=0.1.0-cleanroom"
+echo "VERSION_NAME=0.1.1-cleanroom"
 echo "APK=$SHARED_OUT"
 echo "APK_BYTES=$(wc -c < "$SHARED_OUT")"
 echo "APK_SHA256=$(sha256sum "$SHARED_OUT" | awk '{print $1}')"
