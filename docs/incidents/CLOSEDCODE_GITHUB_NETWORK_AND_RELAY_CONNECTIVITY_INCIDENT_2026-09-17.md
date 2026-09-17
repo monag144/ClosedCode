@@ -179,17 +179,17 @@ OpenAI Status recorded **"Elevated errors in ChatGPT Work"** on 2026-09-16, with
 
 One supplied screenshot displays device time **18:49**. If the screenshot and status-page times are being presented in the same timezone, this would fall inside that incident window. This is a **temporal correlation only**, not proof that the OpenAI incident caused the observed DNS failure.
 
-OpenAI's history also shows other recent Work-related degradations in the surrounding days. This increases the plausibility of an execution-environment/service instability component, but does not establish causation for any single request.
+OpenAI's history also shows other Work-related degradations in the surrounding days. This increases the plausibility of an execution-environment/service instability component, but does not establish causation for any single request.
 
 ### GitHub
 
-GitHub Status for 2026-09-16 records a Copilot AI Model Providers degradation, but did not record a broad GitHub API Requests / Git Operations outage matching the raw-content DNS symptom. Current status when logged showed API Requests and Git Operations operational:
+GitHub Status for 2026-09-16 records a Copilot AI Model Providers degradation, but did not record a broad GitHub API Requests / Git Operations outage matching the raw-content DNS symptom. Status when logged showed API Requests and Git Operations operational:
 
 `https://www.githubstatus.com/`
 
 This weighs against a known broad GitHub repository/API outage as the sole cause. It does not rule out regional DNS, network-path, or `raw.githubusercontent.com` availability problems not represented as a broad GitHub incident.
 
-## Current forensic conclusion
+## Forensic conclusion — 2026-09-17
 
 The available evidence supports **at least two independent instability layers**:
 
@@ -202,7 +202,7 @@ The likely GitHub-facing failure was network/DNS related rather than authenticat
 
 ## Evidence limitations
 
-We do not currently possess:
+The evidence set does not include:
 
 - internal ChatGPT Work connector request logs;
 - DNS resolver logs from the execution environment;
@@ -235,3 +235,6 @@ This incident supplements, but does not rewrite, the Op149/Op150 checkpoint-inte
 ## Conclusion
 
 **YELLOW / FORENSICALLY DOCUMENTED.** The evidence strongly supports intermittent DNS/network failure for at least one GitHub raw-content request and separate local Relay listener failures. A broad GitHub API/authentication failure is not established. Future recurrences should use layered diagnostics so DNS, GitHub HTTP/API, Git transport, Relay listener, and ClosedCode backend failures can be distinguished immediately.
+
+---
+**Record boundary:** 2026-09-17
