@@ -9,9 +9,12 @@ import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
+import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -54,6 +57,13 @@ public final class MainActivity extends Activity {
     private EditText composer;
     private EditText serverUrlInput;
     private EditText directoryInput;
+    private Switch biometricSwitch;
+    private Switch hidePreviewSwitch;
+    private Switch permissionNotifySwitch;
+    private Switch questionNotifySwitch;
+    private Switch completedNotifySwitch;
+    private Switch errorNotifySwitch;
+    private boolean interactionDialogOpen;
 
     private SharedPreferences prefs;
     private ClosedCodeApi api;
@@ -62,6 +72,7 @@ public final class MainActivity extends Activity {
     private boolean serverHealthy;
     private String lastVersion = "—";
     private String lastModelLabel = "backend default";
+    private boolean requestDialogOpen;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -112,6 +123,12 @@ public final class MainActivity extends Activity {
         composer = findViewById(R.id.composer);
         serverUrlInput = findViewById(R.id.serverUrlInput);
         directoryInput = findViewById(R.id.directoryInput);
+        biometricSwitch = findViewById(R.id.biometricSwitch);
+        hidePreviewSwitch = findViewById(R.id.hidePreviewSwitch);
+        permissionNotifySwitch = findViewById(R.id.permissionNotifySwitch);
+        questionNotifySwitch = findViewById(R.id.questionNotifySwitch);
+        completedNotifySwitch = findViewById(R.id.completedNotifySwitch);
+        errorNotifySwitch = findViewById(R.id.errorNotifySwitch);
     }
 
     private void bindActions() {
@@ -125,6 +142,33 @@ public final class MainActivity extends Activity {
         findViewById(R.id.filesButton).setOnClickListener(v -> showFiles("."));
         findViewById(R.id.diffButton).setOnClickListener(v -> showDiff());
         findViewById(R.id.saveBackend).setOnClickListener(v -> saveBackend());
+        findViewById(R.id.serverStrip).setOnClickListener(v -> showPage("connections"));
+        bindToggle(R.id.biometricRow, biometricSwitch, "requireBiometrics", false, false);
+        bindToggle(R.id.hidePreviewRow, hidePreviewSwitch, "hideAppPreview", false, true);
+        bindToggle(R.id.permissionNotifyRow, permissionNotifySwitch, "notifyPermissions", true, false);
+        bindToggle(R.id.questionNotifyRow, questionNotifySwitch, "notifyQuestions", true, false);
+        bindToggle(R.id.completedNotifyRow, completedNotifySwitch, "notifyCompleted", true, false);
+        bindToggle(R.id.errorNotifyRow, errorNotifySwitch, "notifyErrors", true, false);
+        composer.setImeOptions(EditorInfo.IME_ACTION_SEND);
+        composer.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_SEND) { sendPrompt(); return true; }
+            return false;
+        });
+    }
+
+    private void bindToggle(int rowId, Switch toggle, String key, boolean fallback, boolean securePreview) {
+        toggle.setChecked(prefs.getBoolean(key, fallback));
+        if (securePreview) setSecurePreview(toggle.isChecked());
+        toggle.setOnCheckedChangeListener((button, checked) -> {
+            prefs.edit().putBoolean(key, checked).apply();
+            if (securePreview) setSecurePreview(checked);
+        });
+        findViewById(rowId).setOnClickListener(v -> toggle.setChecked(!toggle.isChecked()));
+    }
+
+    private void setSecurePreview(boolean enabled) {
+        if (enabled) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
     }
 
     private void showPage(String page) {
@@ -348,6 +392,8 @@ public final class MainActivity extends Activity {
         toolStatus.setText("Syncing…");
         loadMessages();
         startEventStream();
+        pollRequests();
+        refreshPendingInteractions();
     }
 
     private void closeChat() {
@@ -471,10 +517,305 @@ public final class MainActivity extends Activity {
                 if (data.contains(currentSessionId) || data.contains("message") || data.contains("session")) {
                     toolStatus.setText("Live");
                     loadMessages();
+                    pollRequests();
                 }
+                if (data.contains("permission") || data.contains("question")) refreshPendingInteractions();
             }
             @Override public void closed(String reason) {
                 if (currentSessionId != null) toolStatus.setText("Stream reconnect needed");
+            }
+        });
+    }
+
+    private void refreshPendingInteractions() {
+        if (currentSessionId == null || interactionDialogOpen) return;
+        api.listPermissions(directory, new ClosedCodeApi.Callback() {
+            @Override public void success(String body) {
+                try {
+                    JSONArray pending = new JSONArray(body);
+                    for (int i = 0; i < pending.length(); i++) {
+                        JSONObject request = pending.optJSONObject(i);
+                        if (request != null && currentSessionId.equals(request.optString("sessionID"))) {
+                            showPermissionRequest(request);
+                            return;
+                        }
+                    }
+                } catch (Exception ignored) {}
+                loadPendingQuestions();
+            }
+            @Override public void failure(String message) { loadPendingQuestions(); }
+        });
+    }
+
+    private void showPermissionRequest(JSONObject request) {
+        if (interactionDialogOpen) return;
+        interactionDialogOpen = true;
+        final String requestId = request.optString("id", "");
+        final String permission = request.optString("permission", "Permission");
+        JSONArray patterns = request.optJSONArray("patterns");
+        StringBuilder detail = new StringBuilder(permission);
+        if (patterns != null) for (int i = 0; i < patterns.length(); i++) detail.append("\n").append(patterns.optString(i));
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Permission request")
+                .setMessage(detail.toString())
+                .setPositiveButton("Allow once", (d, w) -> replyPermission(requestId, "once"))
+                .setNeutralButton("Always", (d, w) -> replyPermission(requestId, "always"))
+                .setNegativeButton("Reject", (d, w) -> replyPermission(requestId, "reject"))
+                .create();
+        dialog.setOnDismissListener(d -> { interactionDialogOpen = false; refreshPendingInteractions(); });
+        dialog.show();
+    }
+
+    private void replyPermission(String requestId, String reply) {
+        api.replyPermission(requestId, directory, reply, null, new ClosedCodeApi.Callback() {
+            @Override public void success(String body) { toolStatus.setText("Permission " + reply); loadMessages(); }
+            @Override public void failure(String message) { toast("Permission: " + message); }
+        });
+    }
+
+    private void loadPendingQuestions() {
+        if (currentSessionId == null || interactionDialogOpen) return;
+        api.listQuestions(directory, new ClosedCodeApi.Callback() {
+            @Override public void success(String body) {
+                try {
+                    JSONArray pending = new JSONArray(body);
+                    for (int i = 0; i < pending.length(); i++) {
+                        JSONObject request = pending.optJSONObject(i);
+                        if (request != null && currentSessionId.equals(request.optString("sessionID"))) {
+                            JSONArray questions = request.optJSONArray("questions");
+                            if (questions != null && questions.length() > 0) {
+                                askQuestion(request.optString("id", ""), questions, 0, new JSONArray());
+                                return;
+                            }
+                        }
+                    }
+                } catch (Exception e) { toast("Questions: " + e.getMessage()); }
+            }
+            @Override public void failure(String message) { }
+        });
+    }
+
+    private void askQuestion(String requestId, JSONArray questions, int index, JSONArray answers) {
+        if (index >= questions.length()) {
+            interactionDialogOpen = false;
+            api.replyQuestion(requestId, directory, answers, new ClosedCodeApi.Callback() {
+                @Override public void success(String body) { toolStatus.setText("Question answered"); loadMessages(); }
+                @Override public void failure(String message) { toast("Question: " + message); }
+            });
+            return;
+        }
+        JSONObject question = questions.optJSONObject(index);
+        if (question == null) { answers.put(new JSONArray()); askQuestion(requestId, questions, index + 1, answers); return; }
+        interactionDialogOpen = true;
+        String title = question.optString("header", "Question");
+        String prompt = question.optString("question", question.optString("prompt", "Choose an answer"));
+        JSONArray options = question.optJSONArray("options");
+        if (options == null || options.length() == 0) {
+            EditText input = new EditText(this);
+            input.setHint("Answer");
+            AlertDialog dialog = new AlertDialog.Builder(this)
+                    .setTitle(title).setMessage(prompt).setView(input)
+                    .setPositiveButton("Submit", (d, w) -> { JSONArray a = new JSONArray(); a.put(input.getText().toString()); answers.put(a); interactionDialogOpen = false; askQuestion(requestId, questions, index + 1, answers); })
+                    .setNegativeButton("Reject", (d, w) -> rejectQuestion(requestId)).create();
+            dialog.setOnCancelListener(d -> { interactionDialogOpen = false; });
+            dialog.show();
+            return;
+        }
+        String[] labels = new String[options.length()];
+        for (int i = 0; i < options.length(); i++) {
+            JSONObject option = options.optJSONObject(i);
+            labels[i] = option == null ? options.optString(i) : option.optString("label", option.optString("value", "Option " + (i + 1)));
+        }
+        boolean multiple = question.optBoolean("multiple", false);
+        if (multiple) {
+            boolean[] selected = new boolean[labels.length];
+            AlertDialog dialog = new AlertDialog.Builder(this)
+                    .setTitle(title + "\n" + prompt)
+                    .setMultiChoiceItems(labels, selected, (d, which, checked) -> selected[which] = checked)
+                    .setPositiveButton("Submit", (d, w) -> { JSONArray a = new JSONArray(); for (int i = 0; i < labels.length; i++) if (selected[i]) a.put(labels[i]); answers.put(a); interactionDialogOpen = false; askQuestion(requestId, questions, index + 1, answers); })
+                    .setNegativeButton("Reject", (d, w) -> rejectQuestion(requestId)).create();
+            dialog.setOnCancelListener(d -> { interactionDialogOpen = false; });
+            dialog.show();
+        } else {
+            AlertDialog dialog = new AlertDialog.Builder(this)
+                    .setTitle(title + "\n" + prompt)
+                    .setItems(labels, (d, which) -> { JSONArray a = new JSONArray(); a.put(labels[which]); answers.put(a); interactionDialogOpen = false; askQuestion(requestId, questions, index + 1, answers); })
+                    .setNegativeButton("Reject", (d, w) -> rejectQuestion(requestId)).create();
+            dialog.setOnCancelListener(d -> { interactionDialogOpen = false; });
+            dialog.show();
+        }
+    }
+
+    private void rejectQuestion(String requestId) {
+        interactionDialogOpen = false;
+        api.rejectQuestion(requestId, directory, new ClosedCodeApi.Callback() {
+            @Override public void success(String body) { toolStatus.setText("Question rejected"); loadMessages(); }
+            @Override public void failure(String message) { toast("Question: " + message); }
+        });
+    }
+
+    private void pollRequests() {
+        if (currentSessionId == null || requestDialogOpen) return;
+        final String expectedId = currentSessionId;
+        api.listPermissions(directory, new ClosedCodeApi.Callback() {
+            @Override public void success(String body) {
+                if (!expectedId.equals(currentSessionId) || requestDialogOpen) return;
+                try {
+                    JSONArray arr = new JSONArray(body);
+                    for (int i = 0; i < arr.length(); i++) {
+                        JSONObject request = arr.optJSONObject(i);
+                        if (request != null && expectedId.equals(request.optString("sessionID"))) {
+                            showPermissionRequest(request);
+                            return;
+                        }
+                    }
+                } catch (Exception ignored) {}
+                pollQuestions(expectedId);
+            }
+            @Override public void failure(String message) {
+                if (expectedId.equals(currentSessionId)) pollQuestions(expectedId);
+            }
+        });
+    }
+
+    private void pollQuestions(String expectedId) {
+        if (requestDialogOpen || !expectedId.equals(currentSessionId)) return;
+        api.listQuestions(directory, new ClosedCodeApi.Callback() {
+            @Override public void success(String body) {
+                if (!expectedId.equals(currentSessionId) || requestDialogOpen) return;
+                try {
+                    JSONArray arr = new JSONArray(body);
+                    for (int i = 0; i < arr.length(); i++) {
+                        JSONObject request = arr.optJSONObject(i);
+                        if (request != null && expectedId.equals(request.optString("sessionID"))) {
+                            showQuestionRequest(request);
+                            return;
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+            @Override public void failure(String message) {}
+        });
+    }
+
+    private void showPermissionRequest(JSONObject request) {
+        requestDialogOpen = true;
+        String id = request.optString("id");
+        String permission = request.optString("permission", "Permission request");
+        JSONArray patterns = request.optJSONArray("patterns");
+        StringBuilder message = new StringBuilder(permission);
+        if (patterns != null) {
+            for (int i = 0; i < patterns.length(); i++) message.append("\n").append(patterns.optString(i));
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Permission request")
+                .setMessage(message.toString())
+                .setPositiveButton("Allow once", (dialog, which) -> replyPermission(id, "once"))
+                .setNeutralButton("Always allow", (dialog, which) -> replyPermission(id, "always"))
+                .setNegativeButton("Deny", (dialog, which) -> replyPermission(id, "reject"))
+                .setOnCancelListener(dialog -> { requestDialogOpen = false; })
+                .show();
+    }
+
+    private void replyPermission(String id, String reply) {
+        api.replyPermission(id, directory, reply, null, new ClosedCodeApi.Callback() {
+            @Override public void success(String body) {
+                requestDialogOpen = false;
+                toolStatus.setText("Permission " + reply);
+                pollRequests();
+            }
+            @Override public void failure(String message) {
+                requestDialogOpen = false;
+                toast("Permission: " + message);
+            }
+        });
+    }
+
+    private void showQuestionRequest(JSONObject request) {
+        requestDialogOpen = true;
+        String id = request.optString("id");
+        JSONArray questions = request.optJSONArray("questions");
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(20), dp(8), dp(20), 0);
+        List<EditText> answers = new ArrayList<>();
+        if (questions != null) {
+            for (int i = 0; i < questions.length(); i++) {
+                JSONObject question = questions.optJSONObject(i);
+                if (question == null) continue;
+                String title = question.optString("header", "Question");
+                String prompt = question.optString("question", "");
+                JSONArray options = question.optJSONArray("options");
+                StringBuilder description = new StringBuilder(title);
+                if (!prompt.isEmpty()) description.append("\n").append(prompt);
+                if (options != null && options.length() > 0) {
+                    description.append("\nOptions: ");
+                    for (int j = 0; j < options.length(); j++) {
+                        JSONObject option = options.optJSONObject(j);
+                        if (j > 0) description.append(", ");
+                        description.append(option == null ? options.optString(j) : option.optString("label"));
+                    }
+                }
+                TextView label = simpleText(description.toString(), 13, R.color.cc_text);
+                label.setPadding(0, dp(8), 0, dp(4));
+                EditText input = new EditText(this);
+                input.setHint(question.optBoolean("multiple", false) ? "Answer(s), comma separated" : "Answer");
+                input.setTextColor(getColor(R.color.cc_text));
+                input.setHintTextColor(getColor(R.color.cc_muted));
+                form.addView(label);
+                form.addView(input, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+                answers.add(input);
+            }
+        }
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(form);
+        new AlertDialog.Builder(this)
+                .setTitle("ClosedCode question")
+                .setView(scroll)
+                .setPositiveButton("Reply", (dialog, which) -> {
+                    JSONArray payload = new JSONArray();
+                    for (EditText answer : answers) {
+                        JSONArray selected = new JSONArray();
+                        String raw = answer.getText().toString().trim();
+                        if (!raw.isEmpty()) {
+                            for (String value : raw.split(",")) {
+                                String clean = value.trim();
+                                if (!clean.isEmpty()) selected.put(clean);
+                            }
+                        }
+                        payload.put(selected);
+                    }
+                    replyQuestion(id, payload);
+                })
+                .setNegativeButton("Reject", (dialog, which) -> rejectQuestion(id))
+                .setOnCancelListener(dialog -> { requestDialogOpen = false; })
+                .show();
+    }
+
+    private void replyQuestion(String id, JSONArray answers) {
+        api.replyQuestion(id, directory, answers, new ClosedCodeApi.Callback() {
+            @Override public void success(String body) {
+                requestDialogOpen = false;
+                toolStatus.setText("Question answered");
+                pollRequests();
+            }
+            @Override public void failure(String message) {
+                requestDialogOpen = false;
+                toast("Question: " + message);
+            }
+        });
+    }
+
+    private void rejectQuestion(String id) {
+        api.rejectQuestion(id, directory, new ClosedCodeApi.Callback() {
+            @Override public void success(String body) {
+                requestDialogOpen = false;
+                toolStatus.setText("Question rejected");
+                pollRequests();
+            }
+            @Override public void failure(String message) {
+                requestDialogOpen = false;
+                toast("Question: " + message);
             }
         });
     }
