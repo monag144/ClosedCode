@@ -72,6 +72,32 @@ public final class MainActivity extends Activity {
     private boolean serverHealthy;
     private String lastVersion = "—";
     private String lastModelLabel = "backend default";
+    private String selectedProviderId;
+    private String selectedModelId;
+    private final List<ProviderChoice> providerChoices = new ArrayList<>();
+
+    private static final class ModelChoice {
+        final String id;
+        final String name;
+
+        ModelChoice(String id, String name) {
+            this.id = id;
+            this.name = name;
+        }
+    }
+
+    private static final class ProviderChoice {
+        final String id;
+        final String name;
+        final boolean connected;
+        final List<ModelChoice> models = new ArrayList<>();
+
+        ProviderChoice(String id, String name, boolean connected) {
+            this.id = id;
+            this.name = name;
+            this.connected = connected;
+        }
+    }
 
     @Override
     protected void onCreate(Bundle state) {
@@ -142,6 +168,7 @@ public final class MainActivity extends Activity {
         findViewById(R.id.diffButton).setOnClickListener(v -> showDiff());
         findViewById(R.id.saveBackend).setOnClickListener(v -> saveBackend());
         findViewById(R.id.serverStrip).setOnClickListener(v -> showPage("connections"));
+        modelChip.setOnClickListener(v -> showProviderPicker());
         bindToggle(R.id.biometricRow, biometricSwitch, "requireBiometrics", false, false);
         bindToggle(R.id.hidePreviewRow, hidePreviewSwitch, "hideAppPreview", false, true);
         bindToggle(R.id.permissionNotifyRow, permissionNotifySwitch, "notifyPermissions", true, false);
@@ -236,58 +263,180 @@ public final class MainActivity extends Activity {
         api.listProviders(directory, new ClosedCodeApi.Callback() {
             @Override public void success(String body) {
                 try {
-                    Object root = body.trim().startsWith("[") ? new JSONArray(body) : new JSONObject(body);
-                    String label = findModelLabel(root);
-                    if (!TextUtils.isEmpty(label)) lastModelLabel = label;
-                } catch (Exception ignored) {
+                    JSONObject root = new JSONObject(body);
+                    parseProviderCatalog(root);
+                } catch (Exception e) {
+                    providerChoices.clear();
+                    selectedProviderId = null;
+                    selectedModelId = null;
                     lastModelLabel = "backend default";
                 }
                 modelChip.setText("Model: " + lastModelLabel);
             }
             @Override public void failure(String message) {
-                modelChip.setText("Model: backend default");
+                providerChoices.clear();
+                modelChip.setText("Model: " + lastModelLabel);
             }
         });
     }
 
-    private String findModelLabel(Object node) throws Exception {
-        if (node instanceof JSONObject) {
-            JSONObject obj = (JSONObject) node;
-            String provider = obj.optString("id", obj.optString("name", ""));
-            Object models = obj.opt("models");
-            if (models instanceof JSONObject) {
-                Iterator<String> keys = ((JSONObject) models).keys();
-                if (keys.hasNext()) {
-                    String model = keys.next();
-                    return (provider.isEmpty() ? "" : provider + " / ") + model;
+    private void parseProviderCatalog(JSONObject root) {
+        providerChoices.clear();
+        java.util.HashSet<String> connected = new java.util.HashSet<>();
+        JSONArray connectedArray = root.optJSONArray("connected");
+        if (connectedArray != null) {
+            for (int i = 0; i < connectedArray.length(); i++) connected.add(connectedArray.optString(i));
+        }
+
+        List<ProviderChoice> preferred = new ArrayList<>();
+        List<ProviderChoice> others = new ArrayList<>();
+        JSONArray all = root.optJSONArray("all");
+        if (all != null) {
+            for (int i = 0; i < all.length(); i++) {
+                JSONObject provider = all.optJSONObject(i);
+                if (provider == null) continue;
+                String providerId = provider.optString("id", "");
+                if (providerId.isEmpty()) continue;
+                ProviderChoice choice = new ProviderChoice(
+                        providerId,
+                        provider.optString("name", providerId),
+                        connected.contains(providerId));
+                JSONObject models = provider.optJSONObject("models");
+                if (models != null) {
+                    List<ModelChoice> starred = new ArrayList<>();
+                    List<ModelChoice> regular = new ArrayList<>();
+                    Iterator<String> keys = models.keys();
+                    while (keys.hasNext()) {
+                        String key = keys.next();
+                        JSONObject model = models.optJSONObject(key);
+                        String modelId = model == null ? key : model.optString("id", key);
+                        String modelName = model == null ? modelId : model.optString("name", modelId);
+                        ModelChoice item = new ModelChoice(modelId, modelName);
+                        if (isGlmFlash(modelId, modelName) || isNeo(modelId, modelName)) starred.add(item);
+                        else regular.add(item);
+                    }
+                    choice.models.addAll(starred);
+                    choice.models.addAll(regular);
                 }
+                if (hasPreferredModel(choice)) preferred.add(choice); else others.add(choice);
             }
-            if (models instanceof JSONArray && ((JSONArray) models).length() > 0) {
-                JSONObject first = ((JSONArray) models).optJSONObject(0);
-                if (first != null) {
-                    String model = first.optString("id", first.optString("name", ""));
-                    if (!model.isEmpty()) return (provider.isEmpty() ? "" : provider + " / ") + model;
-                }
-            }
-            Iterator<String> keys = obj.keys();
-            while (keys.hasNext()) {
-                Object child = obj.opt(keys.next());
-                if (child instanceof JSONObject || child instanceof JSONArray) {
-                    String found = findModelLabel(child);
-                    if (!TextUtils.isEmpty(found)) return found;
-                }
-            }
-        } else if (node instanceof JSONArray) {
-            JSONArray arr = (JSONArray) node;
-            for (int i = 0; i < arr.length(); i++) {
-                Object child = arr.opt(i);
-                if (child instanceof JSONObject || child instanceof JSONArray) {
-                    String found = findModelLabel(child);
-                    if (!TextUtils.isEmpty(found)) return found;
+        }
+        providerChoices.addAll(preferred);
+        providerChoices.addAll(others);
+
+        String savedProvider = prefs.getString("selectedProviderId", null);
+        String savedModel = prefs.getString("selectedModelId", null);
+        ProviderChoice savedP = findProvider(savedProvider);
+        ModelChoice savedM = findModel(savedP, savedModel);
+        if (savedP != null && savedM != null && savedP.connected) {
+            applyModelChoice(savedP, savedM, false);
+            return;
+        }
+
+        for (ProviderChoice provider : providerChoices) {
+            if (!provider.connected) continue;
+            for (ModelChoice model : provider.models) {
+                if (isGlmFlash(model.id, model.name)) {
+                    applyModelChoice(provider, model, true);
+                    return;
                 }
             }
         }
-        return "";
+        selectedProviderId = null;
+        selectedModelId = null;
+        lastModelLabel = "backend default";
+    }
+
+    private void showProviderPicker() {
+        if (providerChoices.isEmpty()) {
+            toast("Provider catalog is still loading");
+            refreshProviders();
+            return;
+        }
+        String[] labels = new String[providerChoices.size()];
+        for (int i = 0; i < providerChoices.size(); i++) {
+            ProviderChoice provider = providerChoices.get(i);
+            String stars = hasGlmFlash(provider) ? "★ GLM  " : hasNeo(provider) ? "★ Neo  " : "";
+            labels[i] = stars + provider.name + (provider.connected ? "  · connected" : "  · not connected");
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Choose provider")
+                .setItems(labels, (dialog, which) -> showModelPicker(providerChoices.get(which)))
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void showModelPicker(ProviderChoice provider) {
+        if (provider.models.isEmpty()) {
+            toast("No models reported for " + provider.name);
+            return;
+        }
+        String[] labels = new String[provider.models.size()];
+        for (int i = 0; i < provider.models.size(); i++) {
+            ModelChoice model = provider.models.get(i);
+            String star = isGlmFlash(model.id, model.name) ? "★ GLM-4.7-Flash  " : isNeo(model.id, model.name) ? "★ Neo  " : "";
+            labels[i] = star + model.name + (model.name.equals(model.id) ? "" : "\n" + model.id);
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(provider.name + (provider.connected ? "" : " · not connected"))
+                .setItems(labels, (dialog, which) -> {
+                    if (!provider.connected) {
+                        toast("Connect " + provider.name + " in the ClosedCode backend first");
+                        return;
+                    }
+                    applyModelChoice(provider, provider.models.get(which), true);
+                })
+                .setNegativeButton("Back", (dialog, which) -> showProviderPicker())
+                .show();
+    }
+
+    private void applyModelChoice(ProviderChoice provider, ModelChoice model, boolean persist) {
+        selectedProviderId = provider.id;
+        selectedModelId = model.id;
+        lastModelLabel = provider.name + " / " + model.name;
+        modelChip.setText("Model: " + lastModelLabel);
+        if (persist) {
+            prefs.edit()
+                    .putString("selectedProviderId", selectedProviderId)
+                    .putString("selectedModelId", selectedModelId)
+                    .apply();
+        }
+    }
+
+    private ProviderChoice findProvider(String id) {
+        if (id == null) return null;
+        for (ProviderChoice provider : providerChoices) if (id.equals(provider.id)) return provider;
+        return null;
+    }
+
+    private ModelChoice findModel(ProviderChoice provider, String id) {
+        if (provider == null || id == null) return null;
+        for (ModelChoice model : provider.models) if (id.equals(model.id)) return model;
+        return null;
+    }
+
+    private boolean hasPreferredModel(ProviderChoice provider) {
+        return hasGlmFlash(provider) || hasNeo(provider);
+    }
+
+    private boolean hasGlmFlash(ProviderChoice provider) {
+        for (ModelChoice model : provider.models) if (isGlmFlash(model.id, model.name)) return true;
+        return false;
+    }
+
+    private boolean hasNeo(ProviderChoice provider) {
+        for (ModelChoice model : provider.models) if (isNeo(model.id, model.name)) return true;
+        return false;
+    }
+
+    private static boolean isGlmFlash(String id, String name) {
+        String value = ((id == null ? "" : id) + " " + (name == null ? "" : name)).toLowerCase();
+        return value.contains("glm-4.7-flash") || value.contains("glm 4.7 flash");
+    }
+
+    private static boolean isNeo(String id, String name) {
+        String value = ((id == null ? "" : id) + " " + (name == null ? "" : name)).toLowerCase();
+        return value.contains("nemotron");
     }
 
     private void refreshSessions() {
@@ -342,15 +491,44 @@ public final class MainActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.VERTICAL);
         row.setBackgroundResource(R.drawable.bg_card);
-        row.setPadding(dp(16), dp(14), dp(16), dp(14));
+        row.setPadding(dp(16), dp(14), dp(16), dp(12));
         TextView titleView = simpleText(title, 16, R.color.cc_text);
         titleView.setTypeface(null, Typeface.BOLD);
         TextView sub = simpleText(subtitle, 12, R.color.cc_muted);
         sub.setPadding(0, dp(5), 0, 0);
         row.addView(titleView);
         row.addView(sub);
-        if (!id.isEmpty()) row.setOnClickListener(v -> openSession(id, title));
+        if (!id.isEmpty()) {
+            TextView delete = simpleText("Delete session", 12, R.color.cc_bad);
+            delete.setGravity(Gravity.END);
+            delete.setPadding(dp(8), dp(10), 0, dp(2));
+            delete.setOnClickListener(v -> confirmDeleteSession(id, title));
+            row.addView(delete);
+            row.setOnClickListener(v -> openSession(id, title));
+        }
         sessionList.addView(row, matchWrapMargins(0, 6, 0, 6));
+    }
+
+    private void confirmDeleteSession(String id, String title) {
+        new AlertDialog.Builder(this)
+                .setTitle("Delete session?")
+                .setMessage(title + "\n\nThis permanently removes the session and its message history.")
+                .setPositiveButton("Delete", (dialog, which) -> deleteSession(id))
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void deleteSession(String id) {
+        api.deleteSession(id, directory, new ClosedCodeApi.Callback() {
+            @Override public void success(String body) {
+                if (id.equals(currentSessionId)) closeChat();
+                else refreshSessions();
+                toast("Session deleted");
+            }
+            @Override public void failure(String message) {
+                toast("Delete failed: " + message);
+            }
+        });
     }
 
     private void createSession() {
@@ -494,7 +672,7 @@ public final class MainActivity extends Activity {
         addMessageBubble("user", text);
         toolStatus.setText("Sending…");
         final String expectedId = currentSessionId;
-        api.promptAsync(expectedId, directory, text, new ClosedCodeApi.Callback() {
+        api.promptAsync(expectedId, directory, text, selectedProviderId, selectedModelId, new ClosedCodeApi.Callback() {
             @Override public void success(String body) {
                 if (!expectedId.equals(currentSessionId)) return;
                 toolStatus.setText("Running…");

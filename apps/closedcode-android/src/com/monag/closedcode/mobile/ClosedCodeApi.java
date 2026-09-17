@@ -61,6 +61,10 @@ public final class ClosedCodeApi {
         async("POST", "/session?" + routing(directory), null, cb);
     }
 
+    public void deleteSession(String sessionId, String directory, Callback cb) {
+        async("DELETE", "/session/" + enc(sessionId) + "?" + routing(directory), null, cb);
+    }
+
     public void listProviders(String directory, Callback cb) {
         async("GET", "/provider?" + routing(directory), null, cb);
     }
@@ -70,6 +74,10 @@ public final class ClosedCodeApi {
     }
 
     public void promptAsync(String sessionId, String directory, String text, Callback cb) {
+        promptAsync(sessionId, directory, text, null, null, cb);
+    }
+
+    public void promptAsync(String sessionId, String directory, String text, String providerId, String modelId, Callback cb) {
         try {
             JSONObject body = new JSONObject();
             JSONArray parts = new JSONArray();
@@ -78,6 +86,12 @@ public final class ClosedCodeApi {
             part.put("text", text);
             parts.put(part);
             body.put("parts", parts);
+            if (providerId != null && !providerId.trim().isEmpty() && modelId != null && !modelId.trim().isEmpty()) {
+                JSONObject model = new JSONObject();
+                model.put("providerID", providerId);
+                model.put("modelID", modelId);
+                body.put("model", model);
+            }
             async("POST", "/session/" + enc(sessionId) + "/prompt_async?" + routing(directory), body.toString(), cb);
         } catch (Exception e) {
             main.post(() -> cb.failure(e.toString()));
