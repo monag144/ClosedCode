@@ -65,6 +65,10 @@ public final class ClosedCodeApi {
         async("DELETE", "/session/" + enc(sessionId) + "?" + routing(directory), null, cb);
     }
 
+    public void listAgents(String directory, Callback cb) {
+        async("GET", "/agent?" + routing(directory), null, cb);
+    }
+
     public void listProviders(String directory, Callback cb) {
         async("GET", "/provider?" + routing(directory), null, cb);
     }
