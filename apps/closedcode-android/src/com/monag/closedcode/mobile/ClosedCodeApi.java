@@ -29,11 +29,19 @@ public final class ClosedCodeApi {
         void closed(String reason);
     }
 
+    public interface ProviderStreamListener {
+        void delta(String text);
+        void complete(boolean cancelled);
+        void failure(String message);
+    }
+
     private final ExecutorService pool = Executors.newFixedThreadPool(4);
     private final Handler main = new Handler(Looper.getMainLooper());
     private volatile String baseUrl;
     private volatile boolean eventLoop;
     private volatile HttpURLConnection eventConnection;
+    private volatile HttpURLConnection providerStreamConnection;
+    private volatile String providerStreamRequestId;
 
     public ClosedCodeApi(String baseUrl) {
         setBaseUrl(baseUrl);
@@ -142,6 +150,104 @@ public final class ClosedCodeApi {
             body.put("messages", messages);
             body.put("stream", false);
             asyncAbsolute("POST", "http://127.0.0.1:4097/v1/chat/completions", body.toString(), cb);
+        } catch (Exception e) {
+            main.post(() -> cb.failure(e.toString()));
+        }
+    }
+
+    public void streamProviderPrompt(
+            String sessionId,
+            String text,
+            String providerId,
+            String modelId,
+            String requestId,
+            ProviderStreamListener listener) {
+        pool.execute(() -> {
+            HttpURLConnection c = null;
+            boolean terminal = false;
+            try {
+                JSONObject body = new JSONObject();
+                body.put("providerID", providerId);
+                body.put("model", modelId);
+                body.put("sessionID", sessionId);
+                body.put("requestID", requestId);
+                JSONArray messages = new JSONArray();
+                JSONObject message = new JSONObject();
+                message.put("role", "user");
+                message.put("content", text);
+                messages.put(message);
+                body.put("messages", messages);
+                body.put("stream", true);
+
+                c = (HttpURLConnection) new URL("http://127.0.0.1:4097/v1/chat/completions").openConnection();
+                providerStreamConnection = c;
+                providerStreamRequestId = requestId;
+                c.setRequestMethod("POST");
+                c.setRequestProperty("Accept", "text/event-stream");
+                c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                c.setConnectTimeout(6000);
+                c.setReadTimeout(0);
+                c.setDoOutput(true);
+                byte[] data = body.toString().getBytes(StandardCharsets.UTF_8);
+                c.setFixedLengthStreamingMode(data.length);
+                try (OutputStream out = c.getOutputStream()) {
+                    out.write(data);
+                }
+
+                int code = c.getResponseCode();
+                if (code < 200 || code >= 300) {
+                    String response = read(c.getErrorStream());
+                    throw new IllegalStateException("HTTP " + code + (response.isEmpty() ? "" : ": " + response));
+                }
+
+                BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8));
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (!line.startsWith("data:")) continue;
+                    String payload = line.substring(5).trim();
+                    if (payload.isEmpty() || "[DONE]".equals(payload)) continue;
+                    JSONObject event = new JSONObject(payload);
+                    JSONObject closedCode = event.optJSONObject("closedcode");
+                    if (closedCode != null && closedCode.optBoolean("complete", false)) {
+                        boolean cancelled = closedCode.optBoolean("cancelled", false);
+                        terminal = true;
+                        main.post(() -> listener.complete(cancelled));
+                        break;
+                    }
+                    JSONArray choices = event.optJSONArray("choices");
+                    JSONObject choice = choices == null ? null : choices.optJSONObject(0);
+                    JSONObject delta = choice == null ? null : choice.optJSONObject("delta");
+                    if (delta == null) continue;
+                    String piece = delta.optString("content", "");
+                    if (piece.isEmpty()) piece = delta.optString("reasoning_content", "");
+                    if (!piece.isEmpty()) {
+                        String finalPiece = piece;
+                        main.post(() -> listener.delta(finalPiece));
+                    }
+                }
+                if (!terminal) {
+                    terminal = true;
+                    main.post(() -> listener.complete(false));
+                }
+            } catch (Exception e) {
+                String msg = e.getMessage() == null ? e.toString() : e.getMessage();
+                if (!terminal) main.post(() -> listener.failure(msg));
+            } finally {
+                if (c != null) c.disconnect();
+                if (requestId.equals(providerStreamRequestId)) {
+                    providerStreamConnection = null;
+                    providerStreamRequestId = null;
+                }
+            }
+        });
+    }
+
+    public void cancelProviderRequest(String requestId, Callback cb) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("requestID", requestId);
+            asyncAbsolute("POST", "http://127.0.0.1:4097/cancel", body.toString(), cb);
         } catch (Exception e) {
             main.post(() -> cb.failure(e.toString()));
         }
@@ -328,6 +434,10 @@ public final class ClosedCodeApi {
 
     public void shutdown() {
         stopEvents();
+        HttpURLConnection stream = providerStreamConnection;
+        if (stream != null) stream.disconnect();
+        providerStreamConnection = null;
+        providerStreamRequestId = null;
         pool.shutdownNow();
     }
 
