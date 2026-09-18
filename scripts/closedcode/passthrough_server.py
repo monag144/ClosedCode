@@ -21,7 +21,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.6.0"
+VERSION = "0.7.0"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -39,6 +39,10 @@ PROVIDERS = {
 
 ACTIVE_STREAMS_LOCK = threading.Lock()
 ACTIVE_STREAMS = {}
+
+ACTIVE_PERMISSIONS_LOCK = threading.Lock()
+ACTIVE_PERMISSIONS = {}
+AGENT_APPROVAL_TOOLS = {"workspace_write", "workspace_mkdir", "shell"}
 
 
 def validate_request_id(value):
@@ -67,6 +71,14 @@ def active_stream_cancel(request_id: str) -> bool:
             upstream.close()
     except Exception:
         pass
+    with ACTIVE_PERMISSIONS_LOCK:
+        waiting = [
+            permission["event"]
+            for permission in ACTIVE_PERMISSIONS.values()
+            if permission.get("requestID") == request_id
+        ]
+    for event in waiting:
+        event.set()
     return True
 
 
@@ -86,6 +98,57 @@ def active_stream_set_upstream(request_id: str, upstream):
         entry = ACTIVE_STREAMS.get(request_id)
         if entry is not None:
             entry["upstream"] = upstream
+
+
+def agent_permission_id(request_id: str, call_id: str, round_index: int) -> str:
+    raw = f"{request_id}:{call_id}:{round_index}".encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()[:32]
+
+
+def agent_permission_register(permission_id: str, request_id: str):
+    event = threading.Event()
+    with ACTIVE_PERMISSIONS_LOCK:
+        ACTIVE_PERMISSIONS[permission_id] = {
+            "requestID": request_id,
+            "event": event,
+            "decision": None,
+        }
+    return event
+
+
+def agent_permission_resolve(permission_id: str, request_id: str, decision: str) -> bool:
+    if decision not in {"allow", "reject"}:
+        raise ValueError("decision must be allow or reject")
+    with ACTIVE_PERMISSIONS_LOCK:
+        entry = ACTIVE_PERMISSIONS.get(permission_id)
+        if not entry or entry.get("requestID") != request_id:
+            return False
+        entry["decision"] = decision
+        event = entry["event"]
+    event.set()
+    return True
+
+
+def agent_permission_wait(permission_id: str, request_id: str, timeout_seconds: int = 120):
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if active_stream_cancelled(request_id):
+            return "cancelled"
+        with ACTIVE_PERMISSIONS_LOCK:
+            entry = ACTIVE_PERMISSIONS.get(permission_id)
+            if not entry:
+                return "reject"
+            decision = entry.get("decision")
+            event = entry["event"]
+        if decision in {"allow", "reject"}:
+            return decision
+        event.wait(timeout=min(0.25, max(0.0, deadline - time.monotonic())))
+    return "reject"
+
+
+def agent_permission_unregister(permission_id: str):
+    with ACTIVE_PERMISSIONS_LOCK:
+        ACTIVE_PERMISSIONS.pop(permission_id, None)
 
 
 
@@ -627,7 +690,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path not in {"/v1/chat/completions", "/history", "/fs/write", "/fs/mkdir", "/exec", "/cancel", "/agent"}:
+        if parsed.path not in {"/v1/chat/completions", "/history", "/fs/write", "/fs/mkdir", "/exec", "/cancel", "/agent", "/agent/permission"}:
             self.send_json(404, {"error": "not_found"})
             return
 
@@ -643,6 +706,24 @@ class Handler(BaseHTTPRequestHandler):
                 request_id = validate_request_id(payload.get("requestID"))
                 cancelled = active_stream_cancel(request_id)
                 self.send_json(200, {"requestID": request_id, "cancelled": cancelled})
+                return
+
+            if parsed.path == "/agent/permission":
+                request_id = validate_request_id(payload.get("requestID"))
+                permission_id = payload.get("permissionID")
+                decision = payload.get("decision")
+                if not isinstance(permission_id, str) or not permission_id:
+                    raise ValueError("permissionID is required")
+                resolved = agent_permission_resolve(permission_id, request_id, decision)
+                self.send_json(
+                    200,
+                    {
+                        "requestID": request_id,
+                        "permissionID": permission_id,
+                        "decision": decision,
+                        "resolved": resolved,
+                    },
+                )
                 return
 
             if parsed.path == "/agent":
@@ -755,18 +836,61 @@ class Handler(BaseHTTPRequestHandler):
                                     name = "unknown"
                                 try:
                                     arguments = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
-                                    tool_event = {
-                                        "closedcode": {
-                                            "type": "tool",
-                                            "requestID": request_id,
-                                            "name": name,
-                                            "status": "running",
-                                            "arguments": arguments,
+                                    if name in AGENT_APPROVAL_TOOLS:
+                                        permission_id = agent_permission_id(request_id, call_id, round_index)
+                                        agent_permission_register(permission_id, request_id)
+                                        try:
+                                            permission_event = {
+                                                "closedcode": {
+                                                    "type": "permission",
+                                                    "requestID": request_id,
+                                                    "permissionID": permission_id,
+                                                    "name": name,
+                                                    "arguments": arguments,
+                                                }
+                                            }
+                                            self.wfile.write(
+                                                ("data: " + json.dumps(permission_event, separators=(",", ":")) + "\n\n").encode("utf-8")
+                                            )
+                                            self.wfile.flush()
+                                            decision = agent_permission_wait(permission_id, request_id)
+                                        finally:
+                                            agent_permission_unregister(permission_id)
+                                        if decision == "cancelled":
+                                            cancelled = True
+                                            break
+                                        if decision != "allow":
+                                            result = {"ok": False, "error": "tool permission rejected"}
+                                        else:
+                                            tool_event = {
+                                                "closedcode": {
+                                                    "type": "tool",
+                                                    "requestID": request_id,
+                                                    "name": name,
+                                                    "status": "running",
+                                                    "arguments": arguments,
+                                                }
+                                            }
+                                            self.wfile.write(
+                                                ("data: " + json.dumps(tool_event, separators=(",", ":")) + "\n\n").encode("utf-8")
+                                            )
+                                            self.wfile.flush()
+                                            result = agent_tool_result(root_value, name, arguments)
+                                    else:
+                                        tool_event = {
+                                            "closedcode": {
+                                                "type": "tool",
+                                                "requestID": request_id,
+                                                "name": name,
+                                                "status": "running",
+                                                "arguments": arguments,
+                                            }
                                         }
-                                    }
-                                    self.wfile.write(("data: " + json.dumps(tool_event, separators=(",", ":")) + "\n\n").encode("utf-8"))
-                                    self.wfile.flush()
-                                    result = agent_tool_result(root_value, name, arguments)
+                                        self.wfile.write(
+                                            ("data: " + json.dumps(tool_event, separators=(",", ":")) + "\n\n").encode("utf-8")
+                                        )
+                                        self.wfile.flush()
+                                        result = agent_tool_result(root_value, name, arguments)
                                 except Exception as exc:
                                     result = {"ok": False, "error": str(exc)}
                                 result_text = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
