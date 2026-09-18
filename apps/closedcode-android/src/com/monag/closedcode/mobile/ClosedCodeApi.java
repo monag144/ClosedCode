@@ -61,6 +61,26 @@ public final class ClosedCodeApi {
         async("POST", "/session?" + routing(directory), null, cb);
     }
 
+    public void createSession(String directory, String title, Callback cb) {
+        try {
+            JSONObject body = new JSONObject();
+            if (title != null && !title.trim().isEmpty()) body.put("title", title.trim());
+            async("POST", "/session?" + routing(directory), body.toString(), cb);
+        } catch (Exception e) {
+            main.post(() -> cb.failure(e.toString()));
+        }
+    }
+
+    public void updateSessionTitle(String sessionId, String directory, String title, Callback cb) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("title", title == null ? "" : title.trim());
+            async("PATCH", "/session/" + enc(sessionId) + "?" + routing(directory), body.toString(), cb);
+        } catch (Exception e) {
+            main.post(() -> cb.failure(e.toString()));
+        }
+    }
+
     public void deleteSession(String sessionId, String directory, Callback cb) {
         async("DELETE", "/session/" + enc(sessionId) + "?" + routing(directory), null, cb);
     }
