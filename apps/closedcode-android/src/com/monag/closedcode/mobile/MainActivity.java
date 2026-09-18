@@ -761,12 +761,46 @@ public final class MainActivity extends Activity {
                 if (!expectedId.equals(currentSessionId)) return;
                 composerUi.onMessagesLoaded(body);
                 renderMessages(body);
-                toolStatus.setText("Idle");
+                if (isPassthroughProvider(composerUi.providerId())) {
+                    loadPassthroughHistory(expectedId);
+                } else {
+                    toolStatus.setText("Idle");
+                }
             }
             @Override public void failure(String message) {
                 if (!expectedId.equals(currentSessionId)) return;
                 toolStatus.setText("Error");
                 toast("Messages: " + message);
+            }
+        });
+    }
+
+    private void loadPassthroughHistory(String expectedId) {
+        api.passthroughHistory(expectedId, new ClosedCodeApi.Callback() {
+            @Override public void success(String body) {
+                if (!expectedId.equals(currentSessionId)) return;
+                try {
+                    JSONObject root = new JSONObject(body);
+                    JSONArray messages = root.optJSONArray("messages");
+                    if (messages != null) {
+                        for (int i = 0; i < messages.length(); i++) {
+                            JSONObject item = messages.optJSONObject(i);
+                            if (item == null) continue;
+                            String role = item.optString("role", "");
+                            String content = item.optString("content", "");
+                            if (!content.trim().isEmpty()) addMessageBubble(role, content);
+                        }
+                    }
+                    messageScroll.post(() -> messageScroll.fullScroll(View.FOCUS_DOWN));
+                    toolStatus.setText("Idle");
+                } catch (Exception e) {
+                    toolStatus.setText("History error");
+                }
+            }
+
+            @Override public void failure(String message) {
+                if (!expectedId.equals(currentSessionId)) return;
+                toolStatus.setText("History unavailable");
             }
         });
     }
@@ -936,26 +970,12 @@ public final class MainActivity extends Activity {
     private void dispatchPassthroughPrompt(String expectedId, String text, String providerId, String modelId) {
         toolStatus.setText("Passthrough · " + providerId);
         setPromptRunning(true);
-        api.passthroughPrompt(text, providerId, modelId, new ClosedCodeApi.Callback() {
+        api.passthroughPrompt(expectedId, text, providerId, modelId, new ClosedCodeApi.Callback() {
             @Override public void success(String body) {
                 if (!expectedId.equals(currentSessionId)) return;
-                try {
-                    JSONObject root = new JSONObject(body);
-                    JSONArray choices = root.optJSONArray("choices");
-                    JSONObject choice = choices == null || choices.length() == 0 ? null : choices.optJSONObject(0);
-                    JSONObject message = choice == null ? null : choice.optJSONObject("message");
-                    String content = message == null ? "" : message.optString("content", "");
-                    if (content.trim().isEmpty() && message != null) {
-                        content = message.optString("reasoning_content", "");
-                    }
-                    if (content.trim().isEmpty()) content = "Provider returned no visible text.";
-                    addMessageBubble("assistant", content);
-                    toolStatus.setText("Passthrough complete");
-                } catch (Exception e) {
-                    addMessageBubble("system", "Passthrough response parse failed: " + e.getMessage());
-                    toolStatus.setText("Error");
-                }
                 setPromptRunning(false);
+                toolStatus.setText("Passthrough complete");
+                loadMessages();
             }
 
             @Override public void failure(String message) {

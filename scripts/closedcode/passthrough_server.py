@@ -18,7 +18,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -242,12 +242,20 @@ class Handler(BaseHTTPRequestHandler):
             if provider_id not in PROVIDERS:
                 raise ValueError("providerID must be nvidia or zai")
 
+            session_id = payload.pop("sessionID", None)
+            if session_id is not None:
+                history_path(session_id)
+
             model = payload.get("model")
             if not isinstance(model, str) or not model.strip():
                 raise ValueError("model is required")
             messages = payload.get("messages")
             if not isinstance(messages, list) or not messages:
                 raise ValueError("messages must be a non-empty array")
+            current_history_messages = []
+            if session_id:
+                current_history_messages = normalize_history_messages(messages)
+                payload["messages"] = load_history(session_id) + current_history_messages
 
             key = provider_key(provider_id)
             upstream_url = provider_base(provider_id) + "/chat/completions"
@@ -298,6 +306,24 @@ class Handler(BaseHTTPRequestHandler):
                     return
 
                 body = upstream.read()
+                if session_id and 200 <= status < 300:
+                    try:
+                        response = json.loads(body.decode("utf-8", errors="replace"))
+                        choices = response.get("choices") if isinstance(response, dict) else None
+                        choice = choices[0] if isinstance(choices, list) and choices else {}
+                        message = choice.get("message") if isinstance(choice, dict) else {}
+                        if not isinstance(message, dict):
+                            message = {}
+                        content = message.get("content")
+                        if not isinstance(content, str) or not content:
+                            content = message.get("reasoning_content")
+                        additions = list(current_history_messages)
+                        if isinstance(content, str) and content:
+                            additions.append({"role": "assistant", "content": content})
+                        if additions:
+                            append_history(session_id, additions)
+                    except Exception:
+                        pass
                 self.send_response(status)
                 self.send_header(
                     "Content-Type",
