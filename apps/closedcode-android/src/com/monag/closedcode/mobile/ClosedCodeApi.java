@@ -187,6 +187,54 @@ public final class ClosedCodeApi {
         async("GET", "/file/content?" + routing(directory) + "&path=" + enc(path), null, cb);
     }
 
+    public void workspaceList(String root, String path, Callback cb) {
+        asyncAbsolute(
+                "GET",
+                "http://127.0.0.1:4097/fs/list?root=" + enc(root) + "&path=" + enc(path),
+                null,
+                cb);
+    }
+
+    public void workspaceRead(String root, String path, Callback cb) {
+        asyncAbsolute(
+                "GET",
+                "http://127.0.0.1:4097/fs/read?root=" + enc(root) + "&path=" + enc(path),
+                null,
+                cb);
+    }
+
+    public void workspaceSearch(String root, String query, Callback cb) {
+        asyncAbsolute(
+                "GET",
+                "http://127.0.0.1:4097/fs/search?root=" + enc(root) + "&query=" + enc(query) + "&limit=100",
+                null,
+                cb);
+    }
+
+    public void workspaceWrite(String root, String path, String content, Callback cb) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("root", root);
+            body.put("path", path);
+            body.put("content", content == null ? "" : content);
+            asyncAbsolute("POST", "http://127.0.0.1:4097/fs/write", body.toString(), cb);
+        } catch (Exception e) {
+            main.post(() -> cb.failure(e.toString()));
+        }
+    }
+
+    public void workspaceMkdir(String root, String path, Callback cb) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("root", root);
+            body.put("path", path);
+            body.put("parents", false);
+            asyncAbsolute("POST", "http://127.0.0.1:4097/fs/mkdir", body.toString(), cb);
+        } catch (Exception e) {
+            main.post(() -> cb.failure(e.toString()));
+        }
+    }
+
     public void listPermissions(String directory, Callback cb) {
         async("GET", "/permission?" + routing(directory), null, cb);
     }
