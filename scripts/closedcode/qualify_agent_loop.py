@@ -97,7 +97,7 @@ def main() -> int:
             (
                 f"You are qualifying the ClosedCode agent loop. You MUST call workspace_write "
                 f"to create {filename} with exactly this content including the newline: "
-                f"{expected!r}. Then call workspace_read on that file to verify it. "
+                f"{expected!r} with no trailing newline. Then call workspace_read on that file to verify it. "
                 "After the tool work succeeds, reply with exactly AGENT_DONE."
             ),
         )
