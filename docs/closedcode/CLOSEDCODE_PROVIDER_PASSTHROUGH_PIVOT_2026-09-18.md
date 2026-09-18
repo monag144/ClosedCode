@@ -1,6 +1,6 @@
 # ClosedCode Provider Passthrough Pivot — 2026-09-18
 
-Status: DIRECTOR DIRECTION / PRE-OP200
+Status: DIRECTOR-RATIFIED ARCHITECTURE PIVOT / SUBSEQUENTLY PROVEN IN OPS201–225
 Repository: monag144/ClosedCode
 Branch: closedcode/android-cleanroom-opencode-mobile-20260916
 
@@ -8,7 +8,7 @@ Branch: closedcode/android-cleanroom-opencode-mobile-20260916
 
 ClosedCode will stop treating OpenCode's compiled agent/runtime graph as a requirement for NVIDIA and GLM operation.
 
-For NVIDIA and GLM, ClosedCode will implement and support a simple passthrough mode: provider/model interaction and resulting stream/events originating in the Termux-side ClosedCode control layer are passed through to the Android application with only the transformation required for a stable ClosedCode protocol/UI.
+For NVIDIA and GLM, ClosedCode adopts a first-class provider compatibility architecture: provider/model interaction and resulting stream/events originate in the Termux-side ClosedCode control layer and are presented to the Android application through the stable ClosedCode protocol/UI.
 
 The intent is solution-first:
 - do not spend the next campaign reverse-engineering OpenCode's LayerNode/location-service graph merely to make NVIDIA or GLM fit it;
@@ -16,7 +16,7 @@ The intent is solution-first:
 - own the provider path in ClosedCode;
 - keep GPT-Termux-Relay protected and separate;
 - preserve normal OpenCode-backed behavior for providers/features where it is useful and functional;
-- make passthrough a supported ClosedCode mode for NVIDIA and GLM.
+- make the ClosedCode-owned provider path a supported first-class architecture for NVIDIA and GLM.
 
 ## Why the direction changed
 
@@ -57,3 +57,34 @@ After the Op200 checkpoint is completed and released:
 Op200 remains the current checkpoint and has not yet been consumed at the time of this document.
 
 This document records Director direction and proposed bounded continuation. It does not itself replace the required Op200 checkpoint evidence or the Heavy Engineer control harness.
+
+
+## Architectural status after implementation
+
+The implementation work completed through Op224 materially changed the status of this decision.
+
+This is no longer merely a proposed emergency bypass around OpenCode.
+
+The ClosedCode-owned provider compatibility architecture has now demonstrated:
+
+- NVIDIA exact-model provider reachability;
+- Android routing through the ClosedCode-owned path;
+- secure per-session history;
+- persisted multi-turn NVIDIA context continuity;
+- Android history reload;
+- Z.AI/GLM provider discovery and authenticated reachability;
+- successful Z.AI streaming/SSE;
+- persistent/idempotent startup ownership for the localhost provider service;
+- separation from protected GPT-Termux-Relay implementation.
+
+Remaining gaps such as Android-side streaming/cancellation parity and broader tool/file parity are product-completion work, not evidence that the architecture itself is an invalid workaround.
+
+Accordingly, future documents should prefer terms such as:
+
+- `ClosedCode-native provider compatibility architecture`;
+- `ClosedCode provider adapter`;
+- `ClosedCode-owned provider path`.
+
+Historical references to `passthrough` or `sidecar` remain valid provenance and do not need to be rewritten out of old evidence.
+
+Avoid describing the architecture as an awkward workaround, temporary hack, or second-class bypass unless referring specifically to its earlier experimental phase.
