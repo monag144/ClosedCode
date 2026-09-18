@@ -70,6 +70,10 @@ public final class MainActivity extends Activity {
     private Switch completedNotifySwitch;
     private Switch errorNotifySwitch;
     private boolean interactionDialogOpen;
+    private boolean pageTransitionRunning;
+    private static final long PAGE_TRANSITION_MS = 240L;
+    private static final PathInterpolator PAGE_TRANSITION_INTERPOLATOR =
+            new PathInterpolator(0.22f, 1f, 0.36f, 1f);
 
     private SharedPreferences prefs;
     private ClosedCodeApi api;
@@ -648,12 +652,10 @@ public final class MainActivity extends Activity {
     }
 
     private void openSession(String id, String title) {
+        if (pageTransitionRunning) return;
         currentSessionId = id;
-        sessionsPage.setVisibility(View.GONE);
         connectionsPage.setVisibility(View.GONE);
         settingsPage.setVisibility(View.GONE);
-        chatPage.setVisibility(View.VISIBLE);
-        bottomNav.setVisibility(View.GONE);
         chatTitle.setText(title);
         chatWorkspace.setText(shortPath(directory));
         composerUi.openSession(id, directory);
@@ -661,13 +663,82 @@ public final class MainActivity extends Activity {
         loadMessages();
         startEventStream();
         refreshPendingInteractions();
+        animateIntoSession();
+    }
+
+    private void animateIntoSession() {
+        pageTransitionRunning = true;
+        float width = Math.max(1f, getResources().getDisplayMetrics().widthPixels);
+        sessionsPage.animate().cancel();
+        chatPage.animate().cancel();
+
+        chatPage.setVisibility(View.VISIBLE);
+        chatPage.setTranslationX(width);
+        chatPage.setAlpha(1f);
+        bottomNav.setVisibility(View.GONE);
+
+        sessionsPage.setVisibility(View.VISIBLE);
+        sessionsPage.setTranslationX(0f);
+        sessionsPage.setAlpha(1f);
+
+        sessionsPage.animate()
+                .translationX(-width * 0.18f)
+                .alpha(0.86f)
+                .setDuration(PAGE_TRANSITION_MS)
+                .setInterpolator(PAGE_TRANSITION_INTERPOLATOR)
+                .start();
+
+        chatPage.animate()
+                .translationX(0f)
+                .setDuration(PAGE_TRANSITION_MS)
+                .setInterpolator(PAGE_TRANSITION_INTERPOLATOR)
+                .withEndAction(() -> {
+                    sessionsPage.setVisibility(View.GONE);
+                    sessionsPage.setTranslationX(0f);
+                    sessionsPage.setAlpha(1f);
+                    pageTransitionRunning = false;
+                })
+                .start();
     }
 
     private void closeChat() {
+        if (pageTransitionRunning) return;
         api.stopEvents();
         composerUi.closeSession();
-        currentSessionId = null;
-        showPage("sessions");
+        animateBackToSessions();
+    }
+
+    private void animateBackToSessions() {
+        pageTransitionRunning = true;
+        float width = Math.max(1f, getResources().getDisplayMetrics().widthPixels);
+        sessionsPage.animate().cancel();
+        chatPage.animate().cancel();
+
+        sessionsPage.setVisibility(View.VISIBLE);
+        sessionsPage.setTranslationX(-width * 0.18f);
+        sessionsPage.setAlpha(0.86f);
+        bottomNav.setVisibility(View.VISIBLE);
+        tintNav("sessions");
+
+        sessionsPage.animate()
+                .translationX(0f)
+                .alpha(1f)
+                .setDuration(PAGE_TRANSITION_MS)
+                .setInterpolator(PAGE_TRANSITION_INTERPOLATOR)
+                .start();
+
+        chatPage.animate()
+                .translationX(width)
+                .setDuration(PAGE_TRANSITION_MS)
+                .setInterpolator(PAGE_TRANSITION_INTERPOLATOR)
+                .withEndAction(() -> {
+                    chatPage.setVisibility(View.GONE);
+                    chatPage.setTranslationX(0f);
+                    currentSessionId = null;
+                    pageTransitionRunning = false;
+                    refreshSessions();
+                })
+                .start();
     }
 
     private void loadMessages() {
@@ -778,6 +849,10 @@ public final class MainActivity extends Activity {
                 if (!expectedId.equals(currentSessionId)) return;
                 toolStatus.setText("Running…");
                 loadMessages();
+                schedulePromptRefresh(expectedId, 450L);
+                schedulePromptRefresh(expectedId, 1100L);
+                schedulePromptRefresh(expectedId, 2200L);
+                schedulePromptRefresh(expectedId, 4200L);
             }
             @Override public void failure(String message) {
                 if (!expectedId.equals(currentSessionId)) return;
@@ -785,6 +860,15 @@ public final class MainActivity extends Activity {
                 addMessageBubble("system", "Prompt failed: " + message);
             }
         });
+    }
+
+    private void schedulePromptRefresh(String expectedId, long delayMs) {
+        composer.postDelayed(() -> {
+            if (expectedId.equals(currentSessionId)) {
+                loadMessages();
+                refreshPendingInteractions();
+            }
+        }, delayMs);
     }
 
     private void startEventStream() {
