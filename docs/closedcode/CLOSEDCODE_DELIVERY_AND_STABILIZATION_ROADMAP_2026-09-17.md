@@ -246,6 +246,32 @@ The product target remains a real ClosedCode coding-agent application, not a plu
 
 The original Op175/Op200 dates remain historical targets rather than claims about the current operation number. Current continuation is bounded to completing and stabilizing the approved provider compatibility architecture and remaining core coding-agent capabilities.
 
+## Agent autonomy amendment — 2026-09-18
+
+The Director clarified the intended meaning of file manipulation and coding-agent capability.
+
+ClosedCode is **not** being developed primarily as a manual Android file manager/editor.
+
+The core requirement is that the **agent itself** can autonomously inspect and modify a real project in the manner of a serious coding agent such as Codex.
+
+The ratified execution model is:
+
+`docs/closedcode/CLOSEDCODE_AGENT_EXECUTION_MODEL_2026-09-18.md`
+
+Accordingly:
+
+- manual file-browser/editor capability is optional convenience, not a completion gate;
+- agent autonomy and software-development effectiveness are the acceptance target;
+- the agent should inspect, edit, create, move/rename, delete, run tools, test/build, diagnose, repair, and continue without requiring the user to manually operate files;
+- dedicated patch/edit/delete/move/Git-diff tooling should be preferred where it improves reliability over whole-file replacement or ad-hoc shell use;
+- a user-selectable **YOLO / FULL DANGER ACCESS** mode must eliminate routine per-write/per-command approval prompts;
+- YOLO removes approval friction, not task-scope reasoning;
+- vague instructions such as "fix this problem" do not authorize unrelated destructive action against system files, unrelated projects, user data, credentials, or protected infrastructure;
+- the default autonomous scope remains the selected project/workspace plus tooling reasonably necessary to complete the assigned task;
+- final acceptance should use a real multi-step coding task: inspect → edit → build/test → diagnose → repair → finish.
+
+The existing Op250 hard stop remains active. This roadmap amendment does not authorize Op251.
+
 ## Roadmap self-check
 
 At every formal review and hard checkpoint, answer plainly:
