@@ -180,6 +180,37 @@ Continuation beyond Op200 is therefore not classified as roadmap drift by itself
 
 The high bar against mission sprawl still applies: unrelated feature expansion should be deferred.
 
+## Final completion sprint — Ops226–250
+
+The Director explicitly released the Op225 hard checkpoint on 2026-09-18.
+
+**Op226 is authorized.**
+
+This is the final intended Heavy Engineer sprint for the current ClosedCode campaign.
+
+Target:
+
+- finish before Op250 if possible;
+- finish by Op250 at the latest;
+- deliver a genuinely usable Android coding-agent APK for on-device development;
+- prioritize full file/project manipulation, shell/tool execution, durable sessions, provider correctness, streaming/cancellation, lifecycle recovery, and practical coding workflows over low-value cosmetic expansion.
+
+The practical ambition is an on-device development experience approaching the effectiveness of a serious coding agent such as Codex, within the limits of the device/provider architecture.
+
+Before every Relay operation in this sprint, freshly read/verify the current Big Three:
+
+1. Heavy Engineer control harness;
+2. Relay recovery guide;
+3. this ClosedCode delivery/stabilization roadmap.
+
+Do not rely on remembered copies.
+
+The Director authorization record is:
+
+`docs/closedcode/HEAVY_ENGINEER8_OP225_RELEASE_FINAL_SPRINT_2026-09-18.md`
+
+Op250 remains a mandatory universal hard stop.
+
 ## Protected Relay boundary
 
 Do not:
