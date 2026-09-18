@@ -21,7 +21,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.5.0"
+VERSION = "0.6.0"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -79,6 +79,13 @@ def active_stream_cancelled(request_id: str) -> bool:
 def active_stream_unregister(request_id: str):
     with ACTIVE_STREAMS_LOCK:
         ACTIVE_STREAMS.pop(request_id, None)
+
+
+def active_stream_set_upstream(request_id: str, upstream):
+    with ACTIVE_STREAMS_LOCK:
+        entry = ACTIVE_STREAMS.get(request_id)
+        if entry is not None:
+            entry["upstream"] = upstream
 
 
 
@@ -203,6 +210,256 @@ def workspace_path(root_value: str, path_value: str, allow_missing: bool = False
 
 def workspace_rel(root: Path, target: Path) -> str:
     return "." if target == root else target.relative_to(root).as_posix()
+
+
+AGENT_MAX_ROUNDS = 16
+AGENT_TOOL_RESULT_LIMIT = 128 * 1024
+
+AGENT_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "workspace_list",
+            "description": "List files and directories inside the selected workspace.",
+            "parameters": {
+                "type": "object",
+                "properties": {"path": {"type": "string", "description": "Workspace-relative directory path. Defaults to ."}},
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "workspace_read",
+            "description": "Read a UTF-8 text file inside the selected workspace.",
+            "parameters": {
+                "type": "object",
+                "properties": {"path": {"type": "string"}},
+                "required": ["path"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "workspace_search",
+            "description": "Search workspace paths and UTF-8 text contents.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+                },
+                "required": ["query"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "workspace_write",
+            "description": "Create or replace a UTF-8 text file inside the selected workspace. Parent directory must already exist.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "content": {"type": "string"},
+                },
+                "required": ["path", "content"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "workspace_mkdir",
+            "description": "Create a directory inside the selected workspace.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "parents": {"type": "boolean"},
+                },
+                "required": ["path"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "shell",
+            "description": "Run a Termux shell command with the selected workspace as its execution root. Use only when needed for coding, builds, tests, git inspection, or project tooling. Avoid destructive commands unless the user explicitly requested them.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {"type": "string"},
+                    "cwd": {"type": "string", "description": "Workspace-relative directory. Defaults to ."},
+                    "timeoutSeconds": {"type": "integer", "minimum": 1, "maximum": 120},
+                },
+                "required": ["command"],
+                "additionalProperties": False,
+            },
+        },
+    },
+]
+
+
+def agent_tool_result(root_value: str, name: str, arguments: dict) -> dict:
+    if not isinstance(arguments, dict):
+        raise ValueError("tool arguments must be an object")
+
+    if name == "workspace_list":
+        root, target = workspace_path(root_value, arguments.get("path", "."))
+        if not target.is_dir():
+            raise ValueError("path is not a directory")
+        items = []
+        for child in sorted(target.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower())):
+            entry = {
+                "name": child.name,
+                "path": workspace_rel(root, child),
+                "type": "directory" if child.is_dir() else "file",
+            }
+            if child.is_file():
+                entry["size"] = child.stat().st_size
+            items.append(entry)
+        return {"ok": True, "path": workspace_rel(root, target), "items": items[:500]}
+
+    if name == "workspace_read":
+        root, target = workspace_path(root_value, arguments.get("path"))
+        if not target.is_file():
+            raise ValueError("path is not a file")
+        size = target.stat().st_size
+        if size > MAX_FILE_BYTES:
+            raise ValueError("file exceeds read limit")
+        return {
+            "ok": True,
+            "path": workspace_rel(root, target),
+            "bytes": size,
+            "content": target.read_text(encoding="utf-8"),
+        }
+
+    if name == "workspace_search":
+        needle = arguments.get("query")
+        if not isinstance(needle, str) or not needle:
+            raise ValueError("query is required")
+        limit = arguments.get("limit", 50)
+        if not isinstance(limit, int):
+            raise ValueError("limit must be an integer")
+        limit = max(1, min(limit, 100))
+        root = workspace_root(root_value)
+        folded = needle.casefold()
+        results = []
+        for base, dirs, files in os.walk(root):
+            dirs[:] = [d for d in dirs if d not in SKIP_SEARCH_DIRS]
+            base_path = Path(base)
+            for filename in files:
+                path = base_path / filename
+                try:
+                    rel = workspace_rel(root, path)
+                    if folded in rel.casefold():
+                        results.append({"path": rel, "line": 0, "preview": rel})
+                        if len(results) >= limit:
+                            break
+                    if path.stat().st_size > MAX_SEARCH_FILE_BYTES:
+                        continue
+                    text = path.read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError):
+                    continue
+                for number, line in enumerate(text.splitlines(), 1):
+                    if folded in line.casefold():
+                        results.append({"path": rel, "line": number, "preview": line[:240]})
+                        if len(results) >= limit:
+                            break
+                if len(results) >= limit:
+                    break
+            if len(results) >= limit:
+                break
+        return {"ok": True, "query": needle, "results": results, "truncated": len(results) >= limit}
+
+    if name == "workspace_write":
+        content = arguments.get("content")
+        if not isinstance(content, str):
+            raise ValueError("content must be text")
+        encoded = content.encode("utf-8")
+        if len(encoded) > MAX_FILE_BYTES:
+            raise ValueError("file exceeds write limit")
+        root, target = workspace_path(root_value, arguments.get("path"), allow_missing=True)
+        if target.exists() and not target.is_file():
+            raise ValueError("path is not a file")
+        if not target.parent.is_dir():
+            raise ValueError("parent directory does not exist")
+        temp = target.with_name(target.name + ".closedcode.agent.tmp")
+        if temp.exists():
+            raise ValueError("temporary write path already exists")
+        temp.write_bytes(encoded)
+        os.chmod(temp, stat.S_IMODE(target.stat().st_mode) if target.exists() else 0o600)
+        os.replace(temp, target)
+        return {"ok": True, "path": workspace_rel(root, target), "bytes": len(encoded)}
+
+    if name == "workspace_mkdir":
+        root, target = workspace_path(root_value, arguments.get("path"), allow_missing=True)
+        if target.exists():
+            raise ValueError("path already exists")
+        target.mkdir(parents=bool(arguments.get("parents", False)), mode=0o700)
+        return {"ok": True, "path": workspace_rel(root, target), "created": True}
+
+    if name == "shell":
+        command = arguments.get("command")
+        if not isinstance(command, str) or not command.strip():
+            raise ValueError("command is required")
+        if len(command) > MAX_COMMAND_CHARS:
+            raise ValueError("command exceeds length limit")
+        timeout_seconds = arguments.get("timeoutSeconds", 60)
+        if not isinstance(timeout_seconds, int):
+            raise ValueError("timeoutSeconds must be an integer")
+        timeout_seconds = max(1, min(timeout_seconds, MAX_COMMAND_TIMEOUT_SECONDS))
+        root, cwd = workspace_path(root_value, arguments.get("cwd", "."))
+        if not cwd.is_dir():
+            raise ValueError("cwd is not a directory")
+        started = time.monotonic()
+        try:
+            completed = subprocess.run(
+                ["/data/data/com.termux/files/usr/bin/sh", "-lc", command],
+                cwd=str(cwd),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=timeout_seconds,
+                check=False,
+            )
+            timed_out = False
+            exit_code = completed.returncode
+            stdout = completed.stdout[:MAX_COMMAND_OUTPUT_BYTES].decode("utf-8", errors="replace")
+            stderr = completed.stderr[:MAX_COMMAND_OUTPUT_BYTES].decode("utf-8", errors="replace")
+            stdout_truncated = len(completed.stdout) > MAX_COMMAND_OUTPUT_BYTES
+            stderr_truncated = len(completed.stderr) > MAX_COMMAND_OUTPUT_BYTES
+        except subprocess.TimeoutExpired as exc:
+            timed_out = True
+            exit_code = None
+            raw_stdout = exc.stdout or b""
+            raw_stderr = exc.stderr or b""
+            stdout = raw_stdout[:MAX_COMMAND_OUTPUT_BYTES].decode("utf-8", errors="replace")
+            stderr = raw_stderr[:MAX_COMMAND_OUTPUT_BYTES].decode("utf-8", errors="replace")
+            stdout_truncated = len(raw_stdout) > MAX_COMMAND_OUTPUT_BYTES
+            stderr_truncated = len(raw_stderr) > MAX_COMMAND_OUTPUT_BYTES
+        return {
+            "ok": True,
+            "cwd": workspace_rel(root, cwd),
+            "exitCode": exit_code,
+            "timedOut": timed_out,
+            "durationMs": int((time.monotonic() - started) * 1000),
+            "stdout": stdout,
+            "stderr": stderr,
+            "stdoutTruncated": stdout_truncated,
+            "stderrTruncated": stderr_truncated,
+        }
+
+    raise ValueError("unknown tool: " + str(name))
 
 
 def provider_status() -> dict[str, bool]:
@@ -370,7 +627,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path not in {"/v1/chat/completions", "/history", "/fs/write", "/fs/mkdir", "/exec", "/cancel"}:
+        if parsed.path not in {"/v1/chat/completions", "/history", "/fs/write", "/fs/mkdir", "/exec", "/cancel", "/agent"}:
             self.send_json(404, {"error": "not_found"})
             return
 
@@ -386,6 +643,210 @@ class Handler(BaseHTTPRequestHandler):
                 request_id = validate_request_id(payload.get("requestID"))
                 cancelled = active_stream_cancel(request_id)
                 self.send_json(200, {"requestID": request_id, "cancelled": cancelled})
+                return
+
+            if parsed.path == "/agent":
+                provider_id = payload.get("providerID")
+                model = payload.get("model")
+                session_id = payload.get("sessionID")
+                request_id = validate_request_id(payload.get("requestID"))
+                root_value = payload.get("root")
+                messages = payload.get("messages")
+                if provider_id not in PROVIDERS:
+                    raise ValueError("providerID must be nvidia or zai")
+                if not isinstance(model, str) or not model.strip():
+                    raise ValueError("model is required")
+                history_path(session_id)
+                workspace_root(root_value)
+                current_history_messages = normalize_history_messages(messages)
+                if not current_history_messages:
+                    raise ValueError("messages must be a non-empty array")
+
+                active_stream_register(request_id, None)
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Cache-Control", "no-cache, no-store")
+                self.send_header("Connection", "close")
+                self.end_headers()
+
+                system = {
+                    "role": "system",
+                    "content": (
+                        "You are ClosedCode, an on-device coding agent. Use the provided tools to inspect, "
+                        "modify, build, test, and diagnose the selected workspace. Never claim a file was "
+                        "changed or a command was run unless you actually used the corresponding tool. "
+                        "Keep actions scoped to the user's request and selected workspace. Prefer inspecting "
+                        "before editing. Avoid destructive shell commands unless the user explicitly asked "
+                        "for destructive work. When the task is complete, answer concisely with what changed "
+                        "and any important test result."
+                    ),
+                }
+                conversation = [system] + load_history(session_id) + current_history_messages
+                key = provider_key(provider_id)
+                upstream_url = provider_base(provider_id) + "/chat/completions"
+                final_text = ""
+                cancelled = False
+
+                try:
+                    for round_index in range(AGENT_MAX_ROUNDS):
+                        if active_stream_cancelled(request_id):
+                            cancelled = True
+                            break
+
+                        upstream_payload = {
+                            "model": model,
+                            "messages": conversation,
+                            "tools": AGENT_TOOLS,
+                            "tool_choice": "auto",
+                            "temperature": 0,
+                            "stream": False,
+                        }
+                        encoded = json.dumps(upstream_payload, separators=(",", ":")).encode("utf-8")
+                        req = urlrequest.Request(
+                            upstream_url,
+                            data=encoded,
+                            method="POST",
+                            headers={
+                                "Authorization": "Bearer " + key,
+                                "Content-Type": "application/json",
+                                "Accept": "application/json",
+                                "User-Agent": "ClosedCode-Agent/" + VERSION,
+                            },
+                        )
+                        try:
+                            upstream = urlrequest.urlopen(req, timeout=180)
+                            active_stream_set_upstream(request_id, upstream)
+                            with upstream:
+                                body = upstream.read()
+                                status = getattr(upstream, "status", 200)
+                            active_stream_set_upstream(request_id, None)
+                        except urlerror.HTTPError as exc:
+                            body = exc.read(131072)
+                            active_stream_set_upstream(request_id, None)
+                            raise RuntimeError("provider HTTP " + str(exc.code) + ": " + body.decode("utf-8", errors="replace")[:1000])
+
+                        if active_stream_cancelled(request_id):
+                            cancelled = True
+                            break
+                        if status < 200 or status >= 300:
+                            raise RuntimeError("provider HTTP " + str(status))
+
+                        response = json.loads(body.decode("utf-8", errors="replace"))
+                        choices = response.get("choices") if isinstance(response, dict) else None
+                        choice = choices[0] if isinstance(choices, list) and choices else {}
+                        message = choice.get("message") if isinstance(choice, dict) else {}
+                        if not isinstance(message, dict):
+                            raise RuntimeError("provider response missing message")
+
+                        tool_calls = message.get("tool_calls")
+                        if isinstance(tool_calls, list) and tool_calls:
+                            conversation.append(message)
+                            for call in tool_calls:
+                                if active_stream_cancelled(request_id):
+                                    cancelled = True
+                                    break
+                                call_id = call.get("id") if isinstance(call, dict) else None
+                                function = call.get("function") if isinstance(call, dict) else None
+                                name = function.get("name") if isinstance(function, dict) else None
+                                raw_args = function.get("arguments", "{}") if isinstance(function, dict) else "{}"
+                                if not isinstance(call_id, str) or not call_id:
+                                    call_id = "closedcode-call-" + str(round_index)
+                                if not isinstance(name, str) or not name:
+                                    name = "unknown"
+                                try:
+                                    arguments = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+                                    tool_event = {
+                                        "closedcode": {
+                                            "type": "tool",
+                                            "requestID": request_id,
+                                            "name": name,
+                                            "status": "running",
+                                            "arguments": arguments,
+                                        }
+                                    }
+                                    self.wfile.write(("data: " + json.dumps(tool_event, separators=(",", ":")) + "\n\n").encode("utf-8"))
+                                    self.wfile.flush()
+                                    result = agent_tool_result(root_value, name, arguments)
+                                except Exception as exc:
+                                    result = {"ok": False, "error": str(exc)}
+                                result_text = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
+                                if len(result_text.encode("utf-8")) > AGENT_TOOL_RESULT_LIMIT:
+                                    result_text = json.dumps({
+                                        "ok": False,
+                                        "error": "tool result exceeded limit",
+                                    }, separators=(",", ":"))
+                                conversation.append({
+                                    "role": "tool",
+                                    "tool_call_id": call_id,
+                                    "name": name,
+                                    "content": result_text,
+                                })
+                                result_event = {
+                                    "closedcode": {
+                                        "type": "tool",
+                                        "requestID": request_id,
+                                        "name": name,
+                                        "status": "completed" if result.get("ok") else "error",
+                                        "detail": result_text[:1000],
+                                    }
+                                }
+                                self.wfile.write(("data: " + json.dumps(result_event, separators=(",", ":")) + "\n\n").encode("utf-8"))
+                                self.wfile.flush()
+                            if cancelled:
+                                break
+                            continue
+
+                        content = message.get("content")
+                        if not isinstance(content, str) or not content:
+                            content = message.get("reasoning_content")
+                        final_text = content if isinstance(content, str) else ""
+                        if final_text:
+                            delta_event = {
+                                "choices": [{"index": 0, "delta": {"content": final_text}, "finish_reason": None}]
+                            }
+                            self.wfile.write(("data: " + json.dumps(delta_event, separators=(",", ":")) + "\n\n").encode("utf-8"))
+                            self.wfile.flush()
+                        break
+                    else:
+                        raise RuntimeError("agent exceeded maximum tool rounds")
+                except Exception as exc:
+                    error_event = {
+                        "closedcode": {
+                            "type": "error",
+                            "requestID": request_id,
+                            "message": str(exc)[:1500],
+                        }
+                    }
+                    try:
+                        self.wfile.write(("data: " + json.dumps(error_event, separators=(",", ":")) + "\n\n").encode("utf-8"))
+                        self.wfile.flush()
+                    except Exception:
+                        pass
+                finally:
+                    cancelled = cancelled or active_stream_cancelled(request_id)
+                    active_stream_unregister(request_id)
+                    try:
+                        additions = list(current_history_messages)
+                        if final_text:
+                            additions.append({"role": "assistant", "content": final_text})
+                        if additions:
+                            append_history(session_id, additions)
+                    except Exception:
+                        pass
+                    try:
+                        marker = {
+                            "closedcode": {
+                                "type": "complete",
+                                "requestID": request_id,
+                                "cancelled": cancelled,
+                                "complete": True,
+                            }
+                        }
+                        self.wfile.write(("data: " + json.dumps(marker, separators=(",", ":")) + "\n\n").encode("utf-8"))
+                        self.wfile.flush()
+                    except Exception:
+                        pass
+                    self.close_connection = True
                 return
 
             if parsed.path == "/exec":
