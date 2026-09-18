@@ -870,6 +870,20 @@ public final class MainActivity extends Activity {
         messageList.addView(box, matchWrapMargins("user".equals(role) ? 42 : 0, 5, "user".equals(role) ? 0 : 20, 5));
     }
 
+    private void addAgentToolBubble(String tool, String status, String detail) {
+        StringBuilder text = new StringBuilder();
+        text.append("⚙ ").append(tool == null || tool.isEmpty() ? "tool" : tool)
+                .append("  ·  ").append(status == null || status.isEmpty() ? "running" : status);
+        if (detail != null && !detail.isEmpty()) text.append("\n").append(trim(detail, 180));
+        TextView v = simpleText(text.toString(), 12, R.color.cc_muted);
+        v.setBackgroundResource(R.drawable.bg_card);
+        v.setPadding(dp(12), dp(10), dp(12), dp(10));
+        messageList.addView(v, matchWrapMargins(0, 4, 36, 4));
+        toolStatus.setText((tool == null || tool.isEmpty() ? "tool" : tool)
+                + " · " + (status == null || status.isEmpty() ? "running" : status));
+        messageScroll.post(() -> messageScroll.fullScroll(View.FOCUS_DOWN));
+    }
+
     private void addToolBubble(JSONObject part) {
         String tool = part.optString("tool", part.optString("name", "tool"));
         JSONObject state = part.optJSONObject("state");
@@ -976,15 +990,16 @@ public final class MainActivity extends Activity {
         activeProviderRequestId = requestId;
         providerStreamText.setLength(0);
         providerStreamBody = addProviderStreamingBubble();
-        toolStatus.setText("Streaming · " + providerId);
+        toolStatus.setText("Agent · " + providerId);
         setPromptRunning(true);
-        api.streamProviderPrompt(
+        api.streamAgentPrompt(
                 expectedId,
+                directory,
                 text,
                 providerId,
                 modelId,
                 requestId,
-                new ClosedCodeApi.ProviderStreamListener() {
+                new ClosedCodeApi.AgentStreamListener() {
                     @Override public void delta(String piece) {
                         if (!expectedId.equals(currentSessionId) || !requestId.equals(activeProviderRequestId)) return;
                         providerStreamText.append(piece);
@@ -992,13 +1007,23 @@ public final class MainActivity extends Activity {
                         messageScroll.post(() -> messageScroll.fullScroll(View.FOCUS_DOWN));
                     }
 
+                    @Override public void tool(String name, String status, String detail) {
+                        if (!expectedId.equals(currentSessionId) || !requestId.equals(activeProviderRequestId)) return;
+                        addAgentToolBubble(name, status, detail);
+                    }
+
+                    @Override public void error(String message) {
+                        if (!expectedId.equals(currentSessionId) || !requestId.equals(activeProviderRequestId)) return;
+                        toolStatus.setText("Agent error");
+                        addMessageBubble("system", "Agent: " + message);
+                    }
+
                     @Override public void complete(boolean cancelled) {
                         if (!expectedId.equals(currentSessionId) || !requestId.equals(activeProviderRequestId)) return;
                         activeProviderRequestId = null;
                         providerStreamBody = null;
                         setPromptRunning(false);
-                        toolStatus.setText(cancelled ? "Stopped" : "Provider complete");
-                        loadMessages();
+                        toolStatus.setText(cancelled ? "Stopped" : "Agent complete");
                     }
 
                     @Override public void failure(String message) {
@@ -1006,8 +1031,8 @@ public final class MainActivity extends Activity {
                         activeProviderRequestId = null;
                         providerStreamBody = null;
                         setPromptRunning(false);
-                        toolStatus.setText("Provider error");
-                        addMessageBubble("system", "Provider failed: " + message);
+                        toolStatus.setText("Agent unavailable");
+                        addMessageBubble("system", "Agent failed: " + message);
                     }
                 });
     }
