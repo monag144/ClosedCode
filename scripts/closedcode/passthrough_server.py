@@ -13,6 +13,7 @@ import json
 import os
 import stat
 import subprocess
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -20,7 +21,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -35,6 +36,50 @@ PROVIDERS = {
         "default_base": "https://api.z.ai/api/paas/v4",
     },
 }
+
+ACTIVE_STREAMS_LOCK = threading.Lock()
+ACTIVE_STREAMS = {}
+
+
+def validate_request_id(value):
+    if not isinstance(value, str) or not value or len(value) > 256:
+        raise ValueError("invalid requestID")
+    return value
+
+
+def active_stream_register(request_id: str, upstream):
+    with ACTIVE_STREAMS_LOCK:
+        if request_id in ACTIVE_STREAMS:
+            raise ValueError("requestID already active")
+        ACTIVE_STREAMS[request_id] = {"upstream": upstream, "cancelled": False}
+
+
+def active_stream_cancel(request_id: str) -> bool:
+    validate_request_id(request_id)
+    with ACTIVE_STREAMS_LOCK:
+        entry = ACTIVE_STREAMS.get(request_id)
+        if not entry:
+            return False
+        entry["cancelled"] = True
+        upstream = entry.get("upstream")
+    try:
+        if upstream is not None:
+            upstream.close()
+    except Exception:
+        pass
+    return True
+
+
+def active_stream_cancelled(request_id: str) -> bool:
+    with ACTIVE_STREAMS_LOCK:
+        entry = ACTIVE_STREAMS.get(request_id)
+        return bool(entry and entry.get("cancelled"))
+
+
+def active_stream_unregister(request_id: str):
+    with ACTIVE_STREAMS_LOCK:
+        ACTIVE_STREAMS.pop(request_id, None)
+
 
 
 def auth_path() -> Path:
@@ -325,7 +370,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path not in {"/v1/chat/completions", "/history", "/fs/write", "/fs/mkdir", "/exec"}:
+        if parsed.path not in {"/v1/chat/completions", "/history", "/fs/write", "/fs/mkdir", "/exec", "/cancel"}:
             self.send_json(404, {"error": "not_found"})
             return
 
@@ -336,6 +381,12 @@ class Handler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
             if not isinstance(payload, dict):
                 raise ValueError("request body must be an object")
+
+            if parsed.path == "/cancel":
+                request_id = validate_request_id(payload.get("requestID"))
+                cancelled = active_stream_cancel(request_id)
+                self.send_json(200, {"requestID": request_id, "cancelled": cancelled})
+                return
 
             if parsed.path == "/exec":
                 root_value = payload.get("root")
@@ -453,6 +504,10 @@ class Handler(BaseHTTPRequestHandler):
             if session_id is not None:
                 history_path(session_id)
 
+            request_id = payload.pop("requestID", None)
+            if request_id is not None:
+                validate_request_id(request_id)
+
             model = payload.get("model")
             if not isinstance(model, str) or not model.strip():
                 raise ValueError("model is required")
@@ -498,18 +553,75 @@ class Handler(BaseHTTPRequestHandler):
             with upstream:
                 status = getattr(upstream, "status", 200)
                 if stream:
+                    if not request_id:
+                        raise ValueError("requestID is required for streaming")
+                    active_stream_register(request_id, upstream)
                     self.send_response(status)
                     self.send_header("Content-Type", "text/event-stream")
                     self.send_header("Cache-Control", "no-cache, no-store")
                     self.send_header("Connection", "close")
                     self.end_headers()
-                    while True:
-                        chunk = upstream.read(8192)
-                        if not chunk:
-                            break
-                        self.wfile.write(chunk)
-                        self.wfile.flush()
-                    self.close_connection = True
+                    assistant_parts = []
+                    try:
+                        while True:
+                            if active_stream_cancelled(request_id):
+                                break
+                            try:
+                                line = upstream.readline()
+                            except Exception:
+                                break
+                            if not line:
+                                break
+                            try:
+                                self.wfile.write(line)
+                                self.wfile.flush()
+                            except Exception:
+                                break
+                            try:
+                                decoded = line.decode("utf-8", errors="replace").strip()
+                                if decoded.startswith("data:"):
+                                    data = decoded[5:].strip()
+                                    if data and data != "[DONE]":
+                                        event = json.loads(data)
+                                        choices = event.get("choices") if isinstance(event, dict) else None
+                                        choice = choices[0] if isinstance(choices, list) and choices else {}
+                                        delta = choice.get("delta") if isinstance(choice, dict) else {}
+                                        if isinstance(delta, dict):
+                                            piece = delta.get("content")
+                                            if not isinstance(piece, str) or not piece:
+                                                piece = delta.get("reasoning_content")
+                                            if isinstance(piece, str) and piece:
+                                                assistant_parts.append(piece)
+                            except Exception:
+                                pass
+                    finally:
+                        cancelled = active_stream_cancelled(request_id)
+                        active_stream_unregister(request_id)
+                        if session_id:
+                            try:
+                                additions = list(current_history_messages)
+                                assistant_text = "".join(assistant_parts)
+                                if assistant_text:
+                                    additions.append({"role": "assistant", "content": assistant_text})
+                                if additions:
+                                    append_history(session_id, additions)
+                            except Exception:
+                                pass
+                        try:
+                            marker = {
+                                "closedcode": {
+                                    "requestID": request_id,
+                                    "cancelled": cancelled,
+                                    "complete": True,
+                                }
+                            }
+                            self.wfile.write(
+                                ("data: " + json.dumps(marker, separators=(",", ":")) + "\n\n").encode("utf-8")
+                            )
+                            self.wfile.flush()
+                        except Exception:
+                            pass
+                        self.close_connection = True
                     return
 
                 body = upstream.read()
