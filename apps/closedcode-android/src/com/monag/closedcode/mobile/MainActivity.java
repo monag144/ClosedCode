@@ -93,6 +93,7 @@ public final class MainActivity extends Activity {
     private String selectedAgent = "build";
     private String selectedVariant;
     private String activeProviderRequestId;
+    private AlertDialog activeAgentPermissionDialog;
     private TextView providerStreamBody;
     private final StringBuilder providerStreamText = new StringBuilder();
     private static final int VOICE_REQUEST_CODE = 413;
@@ -718,10 +719,27 @@ public final class MainActivity extends Activity {
         if (pageTransitionRunning) return;
         streamGeneration++;
         eventReconnectAttempt = 0;
+        cancelActiveProviderForLifecycle();
         api.stopEvents();
         setPromptRunning(false);
         composerUi.closeSession();
         animateBackToSessions();
+    }
+
+    private void cancelActiveProviderForLifecycle() {
+        final String requestId = activeProviderRequestId;
+        activeProviderRequestId = null;
+        providerStreamBody = null;
+        if (activeAgentPermissionDialog != null && activeAgentPermissionDialog.isShowing()) {
+            activeAgentPermissionDialog.dismiss();
+        }
+        activeAgentPermissionDialog = null;
+        interactionDialogOpen = false;
+        if (requestId == null) return;
+        api.cancelProviderRequest(requestId, new ClosedCodeApi.Callback() {
+            @Override public void success(String body) { }
+            @Override public void failure(String message) { }
+        });
     }
 
     private void animateBackToSessions() {
@@ -1012,6 +1030,11 @@ public final class MainActivity extends Activity {
                         addAgentToolBubble(name, status, detail);
                     }
 
+                    @Override public void permission(String permissionId, String name, String arguments) {
+                        if (!expectedId.equals(currentSessionId) || !requestId.equals(activeProviderRequestId)) return;
+                        showAgentPermission(expectedId, requestId, permissionId, name, arguments);
+                    }
+
                     @Override public void error(String message) {
                         if (!expectedId.equals(currentSessionId) || !requestId.equals(activeProviderRequestId)) return;
                         toolStatus.setText("Agent error");
@@ -1035,6 +1058,53 @@ public final class MainActivity extends Activity {
                         addMessageBubble("system", "Agent failed: " + message);
                     }
                 });
+    }
+
+    private void showAgentPermission(
+            String expectedId,
+            String requestId,
+            String permissionId,
+            String tool,
+            String arguments) {
+        if (!expectedId.equals(currentSessionId) || !requestId.equals(activeProviderRequestId)) return;
+        if (activeAgentPermissionDialog != null && activeAgentPermissionDialog.isShowing()) {
+            activeAgentPermissionDialog.dismiss();
+        }
+        interactionDialogOpen = true;
+        String detail = tool + "\n\n" + trim(arguments, 500);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Allow agent tool?")
+                .setMessage(detail)
+                .setPositiveButton("Allow once", (d, w) ->
+                        replyAgentPermission(expectedId, requestId, permissionId, true))
+                .setNegativeButton("Reject", (d, w) ->
+                        replyAgentPermission(expectedId, requestId, permissionId, false))
+                .create();
+        dialog.setCancelable(false);
+        dialog.setOnDismissListener(d -> {
+            activeAgentPermissionDialog = null;
+            interactionDialogOpen = false;
+        });
+        activeAgentPermissionDialog = dialog;
+        dialog.show();
+    }
+
+    private void replyAgentPermission(
+            String expectedId,
+            String requestId,
+            String permissionId,
+            boolean allow) {
+        api.replyAgentPermission(requestId, permissionId, allow, new ClosedCodeApi.Callback() {
+            @Override public void success(String body) {
+                if (!expectedId.equals(currentSessionId)) return;
+                toolStatus.setText(allow ? "Agent tool allowed" : "Agent tool rejected");
+            }
+            @Override public void failure(String message) {
+                if (!expectedId.equals(currentSessionId)) return;
+                toolStatus.setText("Permission reply failed");
+                toast("Agent permission: " + message);
+            }
+        });
     }
 
     private TextView addProviderStreamingBubble() {
@@ -1586,6 +1656,7 @@ public final class MainActivity extends Activity {
 
     @Override protected void onDestroy() {
         streamGeneration++;
+        cancelActiveProviderForLifecycle();
         api.shutdown();
         super.onDestroy();
     }
