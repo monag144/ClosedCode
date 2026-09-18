@@ -8,6 +8,12 @@ ClosedCode Android APK → localhost ClosedCode/OpenCode backend/control layer i
 
 GPT-Termux-Relay is protected infrastructure. It must not be used as ClosedCode source scaffolding or modified merely to simplify ClosedCode development.
 
+## Governance precedence
+
+This roadmap defines product phases and bounded scope; it does **not** authorize crossing Heavy Engineer governance gates. The authoritative Heavy Engineer control harness governs operation accounting, five-operation audits, twenty-operation reviews, and twenty-five-operation hard checkpoints.
+
+A range such as `Ops176–200` becomes available only after any intervening mandatory checkpoint has been completed and freshly released by the Director. Roadmap wording, phase transitions, audit notes, or agent-authored statements cannot self-authorize continuation. When a checkpoint is active, no next-operation planning, script/patch authoring, packet preparation, or substantive mission work may begin until the Director explicitly releases that checkpoint.
+
 ## Immediate governance recovery — Operation 150
 
 Heavy Engineer 7 begins by closing the interrupted Heavy Engineer 6 governance cycle.
