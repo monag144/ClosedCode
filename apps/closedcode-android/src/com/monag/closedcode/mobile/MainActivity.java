@@ -202,6 +202,7 @@ public final class MainActivity extends Activity {
         });
         findViewById(R.id.filesButton).setOnClickListener(v -> showFiles("."));
         findViewById(R.id.diffButton).setOnClickListener(v -> showDiff());
+        findViewById(R.id.runButton).setOnClickListener(v -> showRunCommand());
         findViewById(R.id.saveBackend).setOnClickListener(v -> saveBackend());
         findViewById(R.id.serverStrip).setOnClickListener(v -> showPage("connections"));
         modelChip.setOnClickListener(v -> composerUi.showModelPicker());
@@ -1367,6 +1368,64 @@ public final class MainActivity extends Activity {
     private String childPath(String parent, String name) {
         if (parent == null || parent.isEmpty() || ".".equals(parent)) return name;
         return parent.endsWith("/") ? parent + name : parent + "/" + name;
+    }
+
+    private void showRunCommand() {
+        EditText input = new EditText(this);
+        input.setHint("Command");
+        input.setSingleLine(false);
+        input.setMinLines(2);
+        new AlertDialog.Builder(this)
+                .setTitle("Run in " + shortPath(directory))
+                .setMessage("Runs through the ClosedCode Termux command path.")
+                .setView(input)
+                .setPositiveButton("Run", (dialog, which) -> {
+                    String command = input.getText().toString();
+                    if (!command.trim().isEmpty()) runWorkspaceCommand(command);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void runWorkspaceCommand(String command) {
+        toolStatus.setText("Running command…");
+        api.runCommand(directory, ".", command, 60, new ClosedCodeApi.Callback() {
+            @Override public void success(String body) {
+                try {
+                    JSONObject result = new JSONObject(body);
+                    StringBuilder output = new StringBuilder();
+                    output.append("cwd: ").append(result.optString("cwd", ".")).append("\n");
+                    if (result.optBoolean("timedOut", false)) output.append("timed out\n");
+                    else output.append("exit: ").append(result.optString("exitCode", "null")).append("\n");
+                    output.append("duration: ").append(result.optLong("durationMs", 0)).append(" ms\n");
+                    String stdout = result.optString("stdout", "");
+                    String stderr = result.optString("stderr", "");
+                    if (!stdout.isEmpty()) output.append("\nstdout\n").append(stdout);
+                    if (!stderr.isEmpty()) output.append("\nstderr\n").append(stderr);
+                    if (result.optBoolean("stdoutTruncated", false)) output.append("\n[stdout truncated]");
+                    if (result.optBoolean("stderrTruncated", false)) output.append("\n[stderr truncated]");
+                    TextView text = simpleText(output.toString(), 12, R.color.cc_text);
+                    text.setTextIsSelectable(true);
+                    text.setPadding(dp(16), dp(10), dp(16), dp(10));
+                    ScrollView scroll = new ScrollView(MainActivity.this);
+                    scroll.setBackgroundColor(getColor(R.color.cc_bg));
+                    scroll.addView(text);
+                    toolStatus.setText("Command complete");
+                    new AlertDialog.Builder(MainActivity.this)
+                            .setTitle("Command result")
+                            .setView(scroll)
+                            .setPositiveButton("Done", null)
+                            .show();
+                } catch (Exception e) {
+                    toolStatus.setText("Command parse error");
+                    toast("Command: " + e.getMessage());
+                }
+            }
+            @Override public void failure(String message) {
+                toolStatus.setText("Command failed");
+                toast("Command: " + message);
+            }
+        });
     }
 
     private void showDiff() {
