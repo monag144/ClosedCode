@@ -235,6 +235,19 @@ public final class ClosedCodeApi {
         }
     }
 
+    public void runCommand(String root, String cwd, String command, int timeoutSeconds, Callback cb) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("root", root);
+            body.put("cwd", cwd == null || cwd.trim().isEmpty() ? "." : cwd.trim());
+            body.put("command", command == null ? "" : command);
+            body.put("timeoutSeconds", timeoutSeconds);
+            asyncAbsolute("POST", "http://127.0.0.1:4097/exec", body.toString(), cb);
+        } catch (Exception e) {
+            main.post(() -> cb.failure(e.toString()));
+        }
+    }
+
     public void listPermissions(String directory, Callback cb) {
         async("GET", "/permission?" + routing(directory), null, cb);
     }
