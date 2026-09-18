@@ -1,6 +1,6 @@
 # HE8 Operation Resilience — Op203
 
-Status: GREEN / implementation foundation with dirty generated-cache residue
+Status: YELLOW / functional implementation succeeded; final worktree dirty from generated Python cache
 Operation: HEAVY-ENGINEER8-CLOSEDCODE-OP203.provider-passthrough-foundation
 Relay status: OK
 Exit code: 0
@@ -33,14 +33,16 @@ Self-test evidence:
 - Auth store present.
 - Both provider auth entries reported configured without exposing keys.
 - /health returned healthy with loopback-only service metadata.
-- unsupported provider test returned a controlled invalid_request error.
+- Unsupported provider test returned a controlled invalid_request error.
 
 Protected/live state:
 - GPT-Termux-Relay mutation: none.
-- live OpenCode runtime replacement: none.
+- Live OpenCode runtime replacement: none.
 
 Residual defect:
 - python -m py_compile created untracked scripts/closedcode/__pycache__/.
 - No deletion was performed because Director requires explicit deletion authorization.
 - Checkout therefore ended dirty due generated cache only.
-- Next bounded operation should handle this non-destructively by adding an appropriate ignore rule while integrating the Android/API seam.
+
+Interpretation:
+The ClosedCode-owned Termux passthrough foundation is real and committed, but Op203 does not receive a full GREEN classification because the final checkout was not clean. It has not yet been proven against live NVIDIA or Z.AI upstream requests. Next bounded operation should ignore generated Python cache non-destructively and perform live provider smoke qualification through the loopback sidecar while keeping credentials private.
