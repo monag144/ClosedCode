@@ -8,6 +8,7 @@ returned by this service.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import stat
@@ -15,10 +16,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib import error as urlerror
 from urllib import request as urlrequest
+from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
+DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
+MAX_HISTORY_MESSAGES = 500
 PROVIDERS = {
     "nvidia": {
         "env": "CLOSEDCODE_NVIDIA_BASE_URL",
@@ -63,6 +67,61 @@ def provider_base(provider_id: str) -> str:
     return os.environ.get(spec["env"], spec["default_base"]).rstrip("/")
 
 
+def history_root() -> Path:
+    return Path(
+        os.environ.get("CLOSEDCODE_PASSTHROUGH_HISTORY", str(DEFAULT_HISTORY_ROOT))
+    ).expanduser()
+
+
+def history_path(session_id: str) -> Path:
+    if not isinstance(session_id, str) or not session_id or len(session_id) > 512:
+        raise ValueError("invalid sessionID")
+    digest = hashlib.sha256(session_id.encode("utf-8")).hexdigest()
+    return history_root() / f"{digest}.json"
+
+
+def normalize_history_messages(messages) -> list[dict]:
+    if not isinstance(messages, list):
+        raise ValueError("messages must be an array")
+    result = []
+    for item in messages:
+        if not isinstance(item, dict):
+            raise ValueError("history message must be an object")
+        role = item.get("role")
+        content = item.get("content")
+        if role not in {"user", "assistant", "system"}:
+            raise ValueError("invalid history role")
+        if not isinstance(content, str):
+            raise ValueError("history content must be text")
+        result.append({"role": role, "content": content})
+    return result
+
+
+def load_history(session_id: str) -> list[dict]:
+    path = history_path(session_id)
+    if not path.is_file():
+        return []
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return normalize_history_messages(data)
+
+
+def append_history(session_id: str, messages) -> list[dict]:
+    incoming = normalize_history_messages(messages)
+    history = (load_history(session_id) + incoming)[-MAX_HISTORY_MESSAGES:]
+    root = history_root()
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(root, 0o700)
+    path = history_path(session_id)
+    temp = path.with_suffix(".tmp")
+    temp.write_text(
+        json.dumps(history, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    os.chmod(temp, 0o600)
+    os.replace(temp, path)
+    return history
+
+
 def provider_status() -> dict[str, bool]:
     try:
         data = load_auth()
@@ -98,6 +157,23 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
+        parsed = urlparse(self.path)
+        if parsed.path == "/history":
+            try:
+                values = parse_qs(parsed.query).get("sessionID", [])
+                session_id = values[0] if values else ""
+                self.send_json(
+                    200,
+                    {"sessionID": session_id, "messages": load_history(session_id)},
+                )
+            except ValueError as exc:
+                self.send_json(400, {"error": "invalid_request", "message": str(exc)})
+            except Exception as exc:
+                self.send_json(
+                    500,
+                    {"error": "history_failure", "message": exc.__class__.__name__},
+                )
+            return
         if self.path == "/health":
             self.send_json(
                 200,
@@ -131,7 +207,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(404, {"error": "not_found"})
 
     def do_POST(self):
-        if self.path != "/v1/chat/completions":
+        parsed = urlparse(self.path)
+        if parsed.path not in {"/v1/chat/completions", "/history"}:
             self.send_json(404, {"error": "not_found"})
             return
 
@@ -142,6 +219,20 @@ class Handler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
             if not isinstance(payload, dict):
                 raise ValueError("request body must be an object")
+
+            if parsed.path == "/history":
+                session_id = payload.get("sessionID")
+                messages = payload.get("messages")
+                stored = append_history(session_id, messages)
+                self.send_json(
+                    200,
+                    {
+                        "sessionID": session_id,
+                        "stored": len(normalize_history_messages(messages)),
+                        "total": len(stored),
+                    },
+                )
+                return
 
             provider_id = payload.pop("providerID", None)
             if provider_id is None:
