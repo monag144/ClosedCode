@@ -13,6 +13,7 @@ import json
 import os
 import stat
 import subprocess
+import shutil
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -21,7 +22,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.7.2"
+VERSION = "0.8.0"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -42,7 +43,7 @@ ACTIVE_STREAMS = {}
 
 ACTIVE_PERMISSIONS_LOCK = threading.Lock()
 ACTIVE_PERMISSIONS = {}
-AGENT_APPROVAL_TOOLS = {"workspace_write", "workspace_mkdir", "shell"}
+AGENT_APPROVAL_TOOLS = {"workspace_write", "workspace_patch", "workspace_mkdir", "workspace_move", "workspace_delete", "shell"}
 
 
 def validate_request_id(value):
@@ -337,7 +338,7 @@ def workspace_rel(root: Path, target: Path) -> str:
     return "." if target == root else target.relative_to(root).as_posix()
 
 
-AGENT_MAX_ROUNDS = 16
+AGENT_MAX_ROUNDS = 32
 AGENT_TOOL_RESULT_LIMIT = 128 * 1024
 
 AGENT_TOOLS = [
@@ -394,6 +395,88 @@ AGENT_TOOLS = [
                     "content": {"type": "string"},
                 },
                 "required": ["path", "content"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "workspace_patch",
+            "description": "Apply a targeted UTF-8 text replacement inside one workspace file. By default the old text must occur exactly once.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "oldText": {"type": "string"},
+                    "newText": {"type": "string"},
+                    "replaceAll": {"type": "boolean"},
+                },
+                "required": ["path", "oldText", "newText"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "workspace_move",
+            "description": "Rename or move one file or directory inside the selected workspace. Destination must not already exist.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "source": {"type": "string"},
+                    "destination": {"type": "string"},
+                },
+                "required": ["source", "destination"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "workspace_delete",
+            "description": "Delete a workspace file, or a directory only when recursive=true. Never use outside the assigned development task.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "recursive": {"type": "boolean"},
+                },
+                "required": ["path"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "git_status",
+            "description": "Inspect Git status for the selected workspace.",
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "git_diff",
+            "description": "Inspect workspace Git changes. Set staged=true for the index.",
+            "parameters": {
+                "type": "object",
+                "properties": {"staged": {"type": "boolean"}},
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "git_log",
+            "description": "Inspect recent Git commit history for the selected workspace.",
+            "parameters": {
+                "type": "object",
+                "properties": {"limit": {"type": "integer", "minimum": 1, "maximum": 50}},
                 "additionalProperties": False,
             },
         },
@@ -525,6 +608,87 @@ def agent_tool_result(root_value: str, name: str, arguments: dict) -> dict:
         os.chmod(temp, stat.S_IMODE(target.stat().st_mode) if target.exists() else 0o600)
         os.replace(temp, target)
         return {"ok": True, "path": workspace_rel(root, target), "bytes": len(encoded)}
+
+    if name == "workspace_patch":
+        old_text = arguments.get("oldText")
+        new_text = arguments.get("newText")
+        if not isinstance(old_text, str) or not old_text:
+            raise ValueError("oldText must be non-empty text")
+        if not isinstance(new_text, str):
+            raise ValueError("newText must be text")
+        root, target = workspace_path(root_value, arguments.get("path"))
+        if not target.is_file():
+            raise ValueError("path is not a file")
+        content = target.read_text(encoding="utf-8")
+        occurrences = content.count(old_text)
+        replace_all = bool(arguments.get("replaceAll", False))
+        if occurrences == 0:
+            raise ValueError("oldText not found")
+        if not replace_all and occurrences != 1:
+            raise ValueError("oldText must occur exactly once unless replaceAll=true")
+        updated = content.replace(old_text, new_text, -1 if replace_all else 1)
+        encoded = updated.encode("utf-8")
+        if len(encoded) > MAX_FILE_BYTES:
+            raise ValueError("file exceeds write limit")
+        temp = target.with_name(target.name + ".closedcode.agent.tmp")
+        if temp.exists():
+            raise ValueError("temporary write path already exists")
+        temp.write_bytes(encoded)
+        os.chmod(temp, stat.S_IMODE(target.stat().st_mode))
+        os.replace(temp, target)
+        return {"ok": True, "path": workspace_rel(root, target), "replacements": occurrences if replace_all else 1, "bytes": len(encoded)}
+
+    if name == "workspace_move":
+        root, source = workspace_path(root_value, arguments.get("source"))
+        _, destination = workspace_path(root_value, arguments.get("destination"), allow_missing=True)
+        if source == root:
+            raise ValueError("cannot move workspace root")
+        if destination.exists():
+            raise ValueError("destination already exists")
+        if not destination.parent.is_dir():
+            raise ValueError("destination parent does not exist")
+        source.rename(destination)
+        return {"ok": True, "source": workspace_rel(root, source), "destination": workspace_rel(root, destination)}
+
+    if name == "workspace_delete":
+        root, target = workspace_path(root_value, arguments.get("path"))
+        if target == root:
+            raise ValueError("cannot delete workspace root")
+        recursive = bool(arguments.get("recursive", False))
+        rel = workspace_rel(root, target)
+        if target.is_dir():
+            if not recursive:
+                target.rmdir()
+            else:
+                shutil.rmtree(target)
+        else:
+            target.unlink()
+        return {"ok": True, "path": rel, "deleted": True, "recursive": recursive}
+
+    if name in {"git_status", "git_diff", "git_log"}:
+        root = workspace_root(root_value)
+        if name == "git_status":
+            command = ["git", "-C", str(root), "status", "--short", "--branch"]
+        elif name == "git_diff":
+            command = ["git", "-C", str(root), "diff", "--no-ext-diff"]
+            if bool(arguments.get("staged", False)):
+                command.append("--cached")
+            command.extend(["--", "."])
+        else:
+            limit = arguments.get("limit", 10)
+            if not isinstance(limit, int):
+                raise ValueError("limit must be an integer")
+            limit = max(1, min(limit, 50))
+            command = ["git", "-C", str(root), "log", f"-{limit}", "--oneline", "--decorate"]
+        completed = subprocess.run(
+            command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=30, check=False,
+        )
+        output = completed.stdout[:MAX_COMMAND_OUTPUT_BYTES].decode("utf-8", errors="replace")
+        error = completed.stderr[:MAX_COMMAND_OUTPUT_BYTES].decode("utf-8", errors="replace")
+        if completed.returncode != 0:
+            raise ValueError("git command failed: " + (error.strip() or str(completed.returncode)))
+        return {"ok": True, "output": output, "truncated": len(completed.stdout) > MAX_COMMAND_OUTPUT_BYTES}
 
     if name == "workspace_mkdir":
         root, target = workspace_path(root_value, arguments.get("path"), allow_missing=True)
