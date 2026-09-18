@@ -10,6 +10,20 @@ GPT-Termux-Relay is protected infrastructure. It must not be used as ClosedCode 
 
 ## Governance precedence
 
+### Universal Director 25-operation STOP ruling
+
+At every operation number divisible by 25 — Op25, Op50, Op75, Op100, Op125, Op150, Op175, Op200, Op225, Op250, and every later equivalent — **STOP. S-T-O-P.**
+
+The checkpoint is consumed whether its Relay packet succeeds, fails, times out, is rejected, is malformed, or yields no usable checkpoint artifact.
+
+A failed checkpoint Relay operation does **not** authorize the next Relay operation as checkpoint recovery.
+
+No Relay operation after the checkpoint may be issued for evidence recovery, documentation, Git reconciliation, read-only inspection, retry, repair, or mission continuation until the Director explicitly and purposefully releases the named checkpoint.
+
+Checkpoint review/evidence presentation must use permitted non-Relay mechanisms while the gate is closed.
+
+This is the ultimate universal Director ruling for this roadmap. It supersedes conflicting phase ranges, recovery language, mission plans, audits, retry rules, or agent interpretations. Only a later explicit Director ruling may intentionally alter it.
+
 This roadmap defines product phases and bounded scope; it does **not** authorize crossing Heavy Engineer governance gates. The authoritative Heavy Engineer control harness governs operation accounting, five-operation audits, twenty-operation reviews, and twenty-five-operation hard checkpoints.
 
 A range such as `Ops176–200` becomes available only after any intervening mandatory checkpoint has been completed and freshly released by the Director. Roadmap wording, phase transitions, audit notes, or agent-authored statements cannot self-authorize continuation. When a checkpoint is active, no next-operation planning, script/patch authoring, packet preparation, or substantive mission work may begin until the Director explicitly releases that checkpoint.
@@ -152,3 +166,12 @@ Do not produce another pretty shell.
 By Op175, produce a real ClosedCode coding-agent application.
 
 By Op200, make it stable enough that the Director should not need another Heavy Engineer campaign merely to finish the basic product.
+
+## Roadmap self-check
+
+At every formal review and hard checkpoint, answer plainly:
+
+1. Are you drifting from the roadmap?
+2. Based on the printed audits and review, do you feel like you are drifting from the roadmap?
+3. Is the roadmap outdated?
+4. Do we need to redesign the roadmap?
