@@ -22,9 +22,19 @@ Preserve all unrelated configuration:
 
 Do not remove custom agents or the project plugin because disposable isolation proved each works independently.
 
+## Runtime cache invalidation
+
+OpenCode caches per-directory instance state. After changing project config, use the server's canonical instance-disposal endpoint before judging the repair:
+
+`POST /instance/dispose?directory=<ClosedCode>`
+
+The endpoint marks the workspace instance for disposal after the response and the server lifecycle invalidates the registered per-directory InstanceState caches. A stale already-created instance may otherwise continue reproducing the old failure after the config file itself has been corrected.
+
+Do not restart or kill the whole backend merely to invalidate one known workspace when this canonical disposal path is available.
+
 ## Acceptance
 
-Recovery is GREEN only when the real ClosedCode workspace satisfies all of the following against the same native backend:
+Recovery is GREEN only after disposing the stale ClosedCode workspace instance and then proving all of the following against the same native backend:
 
 1. `GET /global/health` succeeds.
 2. `GET /agent?directory=<ClosedCode>` returns HTTP 200.
