@@ -21,7 +21,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.7.0"
+VERSION = "0.7.1"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -149,6 +149,68 @@ def agent_permission_wait(permission_id: str, request_id: str, timeout_seconds: 
 def agent_permission_unregister(permission_id: str):
     with ACTIVE_PERMISSIONS_LOCK:
         ACTIVE_PERMISSIONS.pop(permission_id, None)
+
+
+RETRYABLE_PROVIDER_STATUS = {429, 500, 502, 503, 504}
+PROVIDER_MAX_ATTEMPTS = 3
+
+
+def wait_with_cancel(request_id: str, seconds: float) -> bool:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if active_stream_cancelled(request_id):
+            return False
+        time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
+    return not active_stream_cancelled(request_id)
+
+
+def agent_provider_completion(provider_id: str, upstream_url: str, key: str, payload: dict, request_id: str) -> dict:
+    encoded = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    last_error = "provider request failed"
+    for attempt in range(1, PROVIDER_MAX_ATTEMPTS + 1):
+        if active_stream_cancelled(request_id):
+            raise RuntimeError("provider request cancelled")
+        req = urlrequest.Request(
+            upstream_url,
+            data=encoded,
+            method="POST",
+            headers={
+                "Authorization": "Bearer " + key,
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "User-Agent": "ClosedCode-Agent/" + VERSION,
+            },
+        )
+        try:
+            upstream = urlrequest.urlopen(req, timeout=180)
+            active_stream_set_upstream(request_id, upstream)
+            with upstream:
+                body = upstream.read()
+                status = getattr(upstream, "status", 200)
+            active_stream_set_upstream(request_id, None)
+            if status < 200 or status >= 300:
+                last_error = "provider HTTP " + str(status)
+                retryable = status in RETRYABLE_PROVIDER_STATUS
+            else:
+                return json.loads(body.decode("utf-8", errors="replace"))
+        except urlerror.HTTPError as exc:
+            active_stream_set_upstream(request_id, None)
+            status = exc.code
+            try:
+                exc.read(131072)
+            except Exception:
+                pass
+            last_error = "provider HTTP " + str(status)
+            retryable = status in RETRYABLE_PROVIDER_STATUS
+        except (urlerror.URLError, TimeoutError, OSError) as exc:
+            active_stream_set_upstream(request_id, None)
+            last_error = "provider transport error: " + exc.__class__.__name__
+            retryable = True
+        if not retryable or attempt >= PROVIDER_MAX_ATTEMPTS:
+            raise RuntimeError(last_error + " after " + str(attempt) + " attempt(s)")
+        if not wait_with_cancel(request_id, 0.75 * attempt):
+            raise RuntimeError("provider request cancelled")
+    raise RuntimeError(last_error)
 
 
 
@@ -782,37 +844,17 @@ class Handler(BaseHTTPRequestHandler):
                             "temperature": 0,
                             "stream": False,
                         }
-                        encoded = json.dumps(upstream_payload, separators=(",", ":")).encode("utf-8")
-                        req = urlrequest.Request(
+                        response = agent_provider_completion(
+                            provider_id,
                             upstream_url,
-                            data=encoded,
-                            method="POST",
-                            headers={
-                                "Authorization": "Bearer " + key,
-                                "Content-Type": "application/json",
-                                "Accept": "application/json",
-                                "User-Agent": "ClosedCode-Agent/" + VERSION,
-                            },
+                            key,
+                            upstream_payload,
+                            request_id,
                         )
-                        try:
-                            upstream = urlrequest.urlopen(req, timeout=180)
-                            active_stream_set_upstream(request_id, upstream)
-                            with upstream:
-                                body = upstream.read()
-                                status = getattr(upstream, "status", 200)
-                            active_stream_set_upstream(request_id, None)
-                        except urlerror.HTTPError as exc:
-                            body = exc.read(131072)
-                            active_stream_set_upstream(request_id, None)
-                            raise RuntimeError("provider HTTP " + str(exc.code) + ": " + body.decode("utf-8", errors="replace")[:1000])
 
                         if active_stream_cancelled(request_id):
                             cancelled = True
                             break
-                        if status < 200 or status >= 300:
-                            raise RuntimeError("provider HTTP " + str(status))
-
-                        response = json.loads(body.decode("utf-8", errors="replace"))
                         choices = response.get("choices") if isinstance(response, dict) else None
                         choice = choices[0] if isinstance(choices, list) and choices else {}
                         message = choice.get("message") if isinstance(choice, dict) else {}
