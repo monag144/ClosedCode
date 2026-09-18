@@ -92,6 +92,9 @@ public final class MainActivity extends Activity {
     private String selectedModelId;
     private String selectedAgent = "build";
     private String selectedVariant;
+    private String activeProviderRequestId;
+    private TextView providerStreamBody;
+    private final StringBuilder providerStreamText = new StringBuilder();
     private static final int VOICE_REQUEST_CODE = 413;
     private final List<ProviderChoice> providerChoices = new ArrayList<>();
 
@@ -969,29 +972,81 @@ public final class MainActivity extends Activity {
     }
 
     private void dispatchPassthroughPrompt(String expectedId, String text, String providerId, String modelId) {
-        toolStatus.setText("Passthrough · " + providerId);
+        String requestId = expectedId + "-" + System.nanoTime();
+        activeProviderRequestId = requestId;
+        providerStreamText.setLength(0);
+        providerStreamBody = addProviderStreamingBubble();
+        toolStatus.setText("Streaming · " + providerId);
         setPromptRunning(true);
-        api.passthroughPrompt(expectedId, text, providerId, modelId, new ClosedCodeApi.Callback() {
-            @Override public void success(String body) {
-                if (!expectedId.equals(currentSessionId)) return;
-                setPromptRunning(false);
-                toolStatus.setText("Passthrough complete");
-                loadMessages();
-            }
+        api.streamProviderPrompt(
+                expectedId,
+                text,
+                providerId,
+                modelId,
+                requestId,
+                new ClosedCodeApi.ProviderStreamListener() {
+                    @Override public void delta(String piece) {
+                        if (!expectedId.equals(currentSessionId) || !requestId.equals(activeProviderRequestId)) return;
+                        providerStreamText.append(piece);
+                        if (providerStreamBody != null) providerStreamBody.setText(providerStreamText.toString());
+                        messageScroll.post(() -> messageScroll.fullScroll(View.FOCUS_DOWN));
+                    }
 
-            @Override public void failure(String message) {
-                if (!expectedId.equals(currentSessionId)) return;
-                setPromptRunning(false);
-                toolStatus.setText("Passthrough error");
-                addMessageBubble("system", "Passthrough failed: " + message);
-            }
-        });
+                    @Override public void complete(boolean cancelled) {
+                        if (!expectedId.equals(currentSessionId) || !requestId.equals(activeProviderRequestId)) return;
+                        activeProviderRequestId = null;
+                        providerStreamBody = null;
+                        setPromptRunning(false);
+                        toolStatus.setText(cancelled ? "Stopped" : "Provider complete");
+                        loadMessages();
+                    }
+
+                    @Override public void failure(String message) {
+                        if (!expectedId.equals(currentSessionId) || !requestId.equals(activeProviderRequestId)) return;
+                        activeProviderRequestId = null;
+                        providerStreamBody = null;
+                        setPromptRunning(false);
+                        toolStatus.setText("Provider error");
+                        addMessageBubble("system", "Provider failed: " + message);
+                    }
+                });
+    }
+
+    private TextView addProviderStreamingBubble() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(12), dp(10), dp(12), dp(10));
+        TextView tag = simpleText("CLOSEDCODE", 10, R.color.cc_muted);
+        tag.setTypeface(null, Typeface.BOLD);
+        TextView body = simpleText("", 15, R.color.cc_text);
+        body.setPadding(0, dp(6), 0, 0);
+        body.setTextIsSelectable(true);
+        box.addView(tag);
+        box.addView(body);
+        messageList.addView(box, matchWrapMargins(0, 5, 20, 5));
+        messageScroll.post(() -> messageScroll.fullScroll(View.FOCUS_DOWN));
+        return body;
     }
 
     private void abortPrompt() {
         if (currentSessionId == null) return;
         final String expectedId = currentSessionId;
+        final String providerRequestId = activeProviderRequestId;
         toolStatus.setText("Stopping…");
+        if (providerRequestId != null) {
+            api.cancelProviderRequest(providerRequestId, new ClosedCodeApi.Callback() {
+                @Override public void success(String body) {
+                    if (!expectedId.equals(currentSessionId)) return;
+                    toolStatus.setText("Stopping provider…");
+                }
+                @Override public void failure(String message) {
+                    if (!expectedId.equals(currentSessionId)) return;
+                    toolStatus.setText("Stop failed");
+                    toast("Provider stop: " + message);
+                }
+            });
+            return;
+        }
         api.abort(expectedId, directory, new ClosedCodeApi.Callback() {
             @Override public void success(String body) {
                 if (!expectedId.equals(currentSessionId)) return;
