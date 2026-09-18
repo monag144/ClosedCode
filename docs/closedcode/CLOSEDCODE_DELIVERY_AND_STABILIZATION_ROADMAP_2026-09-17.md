@@ -4,9 +4,53 @@
 
 ## Architecture
 
-ClosedCode Android APK → localhost ClosedCode/OpenCode backend/control layer in Termux → providers/models + filesystem/tools.
+ClosedCode Android APK → localhost ClosedCode backend/control layer in Termux → supported provider/runtime adapters + filesystem/tools.
+
+OpenCode remains an important compatibility/reference backend where its runtime path is functional, but it is no longer a mandatory transit layer for every provider.
 
 GPT-Termux-Relay is protected infrastructure. It must not be used as ClosedCode source scaffolding or modified merely to simplify ClosedCode development.
+
+### Soft architecture amendment — 2026-09-18
+
+The roadmap is amended to recognize the provider-compatibility pivot as a first-class ClosedCode architecture, not a temporary workaround.
+
+Earlier work assumed that NVIDIA and Z.AI/GLM should traverse OpenCode's compiled agent/runtime graph on Android/Bionic. Repeated A/B qualification and source archaeology showed that this assumption was not reliable:
+
+- OpenCode/Bun compiled graph behavior reproduced the internal `a.name`/LayerNode failure on the affected path;
+- equivalent source/runtime controls passed when compile-time splitting was removed;
+- upstream Android/Termux compatibility records independently confirm that OpenCode's v1/Bun-era runtime has real platform-specific compatibility constraints, while newer upstream work is moving away from that architecture;
+- continuing to force every ClosedCode provider through that graph would make ClosedCode dependent on an upstream incompatibility it does not own.
+
+The adopted re-approach is therefore:
+
+**ClosedCode owns the provider compatibility boundary.**
+
+For providers such as NVIDIA and Z.AI/GLM, ClosedCode may communicate through its own Termux-side provider adapter/session layer and present that capability to the Android app through the ClosedCode protocol.
+
+This architecture is considered a supported product path when it meets the same quality bar as any other backend path:
+
+- exact provider/model identity;
+- authenticated requests;
+- streaming where supported;
+- durable session continuity;
+- cancellation/stop behavior;
+- explicit errors;
+- secure credential handling;
+- tool/file capability where supported;
+- Android reconnect/lifecycle behavior;
+- diagnostics and qualification evidence.
+
+The implementation developed during Ops201–225 has already proved substantial parts of this path, including NVIDIA provider reachability, Android routing, persisted multi-turn context, Z.AI/GLM reachability/streaming, and persistent startup ownership.
+
+Accordingly, roadmap language should no longer treat this approach as an awkward bypass, emergency sidecar, or second-class fallback merely because it does not traverse OpenCode's compiled graph.
+
+It is a deliberate ClosedCode-native provider compatibility architecture chosen after evidence invalidated the earlier architectural assumption.
+
+OpenCode-backed operation remains supported where useful and functional. This amendment does not require removing OpenCode; it removes the requirement that OpenCode's compiled runtime graph sit in the critical path for every provider.
+
+The detailed pivot/provenance record remains:
+
+`docs/closedcode/CLOSEDCODE_PROVIDER_PASSTHROUGH_PIVOT_2026-09-18.md`
 
 ## Governance precedence
 
@@ -120,17 +164,21 @@ This block is for:
 
 Use real-device testing aggressively.
 
-## Operation 200 — TERMINAL CAMPAIGN CHECKPOINT
+## Operation 200 — ORIGINAL TERMINAL CAMPAIGN CHECKPOINT
 
-This engineering campaign is expected to finish by Op200.
+The original roadmap expected this engineering campaign to finish by Op200.
 
-Intended progression:
+Original intended progression:
 - Op150 — recover governance;
 - Ops151–175 — make ClosedCode work;
 - Ops176–200 — make ClosedCode reliable;
 - Op200 — final campaign checkpoint.
 
-There should be an extremely high bar for continuing this campaign beyond Op200. Work not required for a functional, reliable ClosedCode product should be deferred rather than allowing the mission to sprawl indefinitely.
+That expectation remains useful historical scope evidence, but it was superseded in practice by explicit Director-authorized continuation after the OpenCode/Bionic incompatibility forced a bounded architecture re-approach.
+
+Continuation beyond Op200 is therefore not classified as roadmap drift by itself. It is justified only to complete and stabilize the Director-approved provider compatibility architecture and the remaining core-product gaps.
+
+The high bar against mission sprawl still applies: unrelated feature expansion should be deferred.
 
 ## Protected Relay boundary
 
@@ -163,9 +211,9 @@ Do not produce another plumbing demo.
 
 Do not produce another pretty shell.
 
-By Op175, produce a real ClosedCode coding-agent application.
+The product target remains a real ClosedCode coding-agent application, not a plumbing demo or cosmetic shell.
 
-By Op200, make it stable enough that the Director should not need another Heavy Engineer campaign merely to finish the basic product.
+The original Op175/Op200 dates remain historical targets rather than claims about the current operation number. Current continuation is bounded to completing and stabilizing the approved provider compatibility architecture and remaining core coding-agent capabilities.
 
 ## Roadmap self-check
 
