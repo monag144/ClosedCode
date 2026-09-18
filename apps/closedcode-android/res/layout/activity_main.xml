@@ -534,6 +534,12 @@
                         android:textColor="@color/cc_muted"
                         android:textSize="11sp" />
                 </LinearLayout>
+                <com.monag.closedcode.mobile.ContextUsageView
+                    android:id="@+id/usageButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:contentDescription="Session context usage" />
+
                 <TextView
                     android:id="@+id/filesButton"
                     android:layout_width="48dp"
