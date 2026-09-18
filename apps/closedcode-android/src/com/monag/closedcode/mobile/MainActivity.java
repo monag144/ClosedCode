@@ -60,6 +60,7 @@ public final class MainActivity extends Activity {
     private TextView effortChip;
     private TextView voiceButton;
     private TextView toolStatus;
+    private TextView sendButton;
     private ContextUsageView usageButton;
     private EditText composer;
     private EditText serverUrlInput;
@@ -72,6 +73,9 @@ public final class MainActivity extends Activity {
     private Switch errorNotifySwitch;
     private boolean interactionDialogOpen;
     private boolean pageTransitionRunning;
+    private boolean promptRunning;
+    private int streamGeneration;
+    private int eventReconnectAttempt;
     private static final long PAGE_TRANSITION_MS = 240L;
     private static final PathInterpolator PAGE_TRANSITION_INTERPOLATOR =
             new PathInterpolator(0.22f, 1f, 0.36f, 1f);
@@ -172,6 +176,7 @@ public final class MainActivity extends Activity {
         effortChip = findViewById(R.id.effortChip);
         voiceButton = findViewById(R.id.voiceButton);
         toolStatus = findViewById(R.id.toolStatus);
+        sendButton = findViewById(R.id.sendButton);
         usageButton = findViewById(R.id.usageButton);
         composer = findViewById(R.id.composer);
         serverUrlInput = findViewById(R.id.serverUrlInput);
@@ -191,7 +196,10 @@ public final class MainActivity extends Activity {
         findViewById(R.id.refreshSessions).setOnClickListener(v -> refreshEverything());
         findViewById(R.id.newSessionButton).setOnClickListener(v -> createSession());
         findViewById(R.id.backButton).setOnClickListener(v -> closeChat());
-        findViewById(R.id.sendButton).setOnClickListener(v -> sendPrompt());
+        sendButton.setOnClickListener(v -> {
+            if (promptRunning) abortPrompt();
+            else sendPrompt();
+        });
         findViewById(R.id.filesButton).setOnClickListener(v -> showFiles("."));
         findViewById(R.id.diffButton).setOnClickListener(v -> showDiff());
         findViewById(R.id.saveBackend).setOnClickListener(v -> saveBackend());
@@ -634,7 +642,7 @@ public final class MainActivity extends Activity {
             return;
         }
         toolStatus.setText("Creating session…");
-        api.createSession(directory, new ClosedCodeApi.Callback() {
+        api.createSession(directory, "ClosedCode session", new ClosedCodeApi.Callback() {
             @Override public void success(String body) {
                 try {
                     JSONObject session = new JSONObject(body);
@@ -704,7 +712,10 @@ public final class MainActivity extends Activity {
 
     private void closeChat() {
         if (pageTransitionRunning) return;
+        streamGeneration++;
+        eventReconnectAttempt = 0;
         api.stopEvents();
+        setPromptRunning(false);
         composerUi.closeSession();
         animateBackToSessions();
     }
@@ -764,11 +775,20 @@ public final class MainActivity extends Activity {
         messageList.removeAllViews();
         try {
             JSONArray arr = new JSONArray(body);
+            String lastRole = "";
+            boolean lastAssistantCompleted = false;
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject item = arr.optJSONObject(i);
                 if (item == null) continue;
                 JSONObject info = item.optJSONObject("info");
                 String role = info == null ? "" : info.optString("role", "");
+                if (!role.isEmpty()) {
+                    lastRole = role;
+                    if ("assistant".equals(role)) {
+                        JSONObject time = info.optJSONObject("time");
+                        lastAssistantCompleted = time != null && time.has("completed");
+                    }
+                }
                 JSONArray parts = item.optJSONArray("parts");
                 if (parts == null) continue;
                 for (int j = 0; j < parts.length(); j++) {
@@ -787,6 +807,9 @@ public final class MainActivity extends Activity {
                         addActivityLine(type, "");
                     }
                 }
+            }
+            if ("assistant".equals(lastRole) && lastAssistantCompleted) {
+                setPromptRunning(false);
             }
             messageScroll.post(() -> messageScroll.fullScroll(View.FOCUS_DOWN));
         } catch (Exception e) {
@@ -830,13 +853,48 @@ public final class MainActivity extends Activity {
     }
 
     private void sendPrompt() {
-        if (currentSessionId == null) return;
+        if (currentSessionId == null || promptRunning) return;
         String text = composer.getText().toString().trim();
         if (text.isEmpty()) return;
+
         composer.setText("");
         addMessageBubble("user", text);
-        toolStatus.setText("Sending…");
         final String expectedId = currentSessionId;
+        final String currentTitle = chatTitle.getText().toString();
+        final boolean backendDefaultTitle = currentTitle.startsWith("New session");
+        final boolean closedCodePlaceholderTitle = currentTitle.startsWith("ClosedCode session");
+
+        if (backendDefaultTitle || closedCodePlaceholderTitle) {
+            String safeTitle = trim(text, 64);
+            if (safeTitle.isEmpty()) safeTitle = "ClosedCode session";
+            final String resolvedTitle = safeTitle;
+            toolStatus.setText("Preparing session…");
+            api.updateSessionTitle(expectedId, directory, resolvedTitle, new ClosedCodeApi.Callback() {
+                @Override public void success(String body) {
+                    if (!expectedId.equals(currentSessionId)) return;
+                    chatTitle.setText(resolvedTitle);
+                    dispatchPrompt(expectedId, text);
+                }
+                @Override public void failure(String message) {
+                    if (!expectedId.equals(currentSessionId)) return;
+                    if (backendDefaultTitle) {
+                        composer.setText(text);
+                        toolStatus.setText("Error");
+                        addMessageBubble("system", "Unable to prepare this legacy session: " + message);
+                        return;
+                    }
+                    dispatchPrompt(expectedId, text);
+                }
+            });
+            return;
+        }
+
+        dispatchPrompt(expectedId, text);
+    }
+
+    private void dispatchPrompt(String expectedId, String text) {
+        toolStatus.setText("Sending…");
+        setPromptRunning(true);
         api.promptAsync(
                 expectedId,
                 directory,
@@ -857,10 +915,37 @@ public final class MainActivity extends Activity {
             }
             @Override public void failure(String message) {
                 if (!expectedId.equals(currentSessionId)) return;
+                setPromptRunning(false);
                 toolStatus.setText("Error");
                 addMessageBubble("system", "Prompt failed: " + message);
             }
         });
+    }
+
+    private void abortPrompt() {
+        if (currentSessionId == null) return;
+        final String expectedId = currentSessionId;
+        toolStatus.setText("Stopping…");
+        api.abort(expectedId, directory, new ClosedCodeApi.Callback() {
+            @Override public void success(String body) {
+                if (!expectedId.equals(currentSessionId)) return;
+                setPromptRunning(false);
+                toolStatus.setText("Stopped");
+                loadMessages();
+            }
+            @Override public void failure(String message) {
+                if (!expectedId.equals(currentSessionId)) return;
+                toolStatus.setText("Stop failed");
+                toast("Stop: " + message);
+            }
+        });
+    }
+
+    private void setPromptRunning(boolean running) {
+        promptRunning = running;
+        if (sendButton == null) return;
+        sendButton.setText(running ? "■" : "↑");
+        sendButton.setContentDescription(running ? "Stop generation" : "Send prompt");
     }
 
     private void schedulePromptRefresh(String expectedId, long delayMs) {
@@ -873,18 +958,36 @@ public final class MainActivity extends Activity {
     }
 
     private void startEventStream() {
+        startEventStream(true);
+    }
+
+    private void startEventStream(boolean resetBackoff) {
+        if (resetBackoff) eventReconnectAttempt = 0;
+        final int generation = ++streamGeneration;
         api.startEvents(directory, new ClosedCodeApi.EventListener() {
             @Override public void event(String data) {
-                if (currentSessionId == null) return;
+                if (generation != streamGeneration || currentSessionId == null) return;
+                eventReconnectAttempt = 0;
                 if (data.contains(currentSessionId) || data.contains("message") || data.contains("session")) {
                     toolStatus.setText("Live");
                     loadMessages();
                     refreshPendingInteractions();
                 }
                 if (data.contains("permission") || data.contains("question")) refreshPendingInteractions();
+                if (data.contains("error") && data.contains(currentSessionId)) {
+                    setPromptRunning(false);
+                }
             }
             @Override public void closed(String reason) {
-                if (currentSessionId != null) toolStatus.setText("Stream reconnect needed");
+                if (generation != streamGeneration || currentSessionId == null) return;
+                int attempt = ++eventReconnectAttempt;
+                long delay = Math.min(8000L, 500L << Math.min(attempt - 1, 4));
+                toolStatus.setText("Reconnecting…");
+                composer.postDelayed(() -> {
+                    if (generation == streamGeneration && currentSessionId != null) {
+                        startEventStream(false);
+                    }
+                }, delay);
             }
         });
     }
@@ -1153,6 +1256,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        streamGeneration++;
         api.shutdown();
         super.onDestroy();
     }
