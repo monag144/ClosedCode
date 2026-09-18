@@ -38,6 +38,7 @@ public final class ClosedCodeApi {
     public interface AgentStreamListener {
         void delta(String text);
         void tool(String name, String status, String detail);
+        void permission(String permissionId, String name, String arguments);
         void error(String message);
         void complete(boolean cancelled);
         void failure(String message);
@@ -315,6 +316,14 @@ public final class ClosedCodeApi {
                             main.post(() -> listener.tool(name, status, detail));
                             continue;
                         }
+                        if ("permission".equals(type)) {
+                            String permissionId = closedCode.optString("permissionID", "");
+                            String name = closedCode.optString("name", "tool");
+                            JSONObject argumentsObject = closedCode.optJSONObject("arguments");
+                            String arguments = argumentsObject == null ? "{}" : argumentsObject.toString();
+                            main.post(() -> listener.permission(permissionId, name, arguments));
+                            continue;
+                        }
                         if ("error".equals(type)) {
                             String messageText = closedCode.optString("message", "Agent error");
                             main.post(() -> listener.error(messageText));
@@ -360,6 +369,18 @@ public final class ClosedCodeApi {
             JSONObject body = new JSONObject();
             body.put("requestID", requestId);
             asyncAbsolute("POST", "http://127.0.0.1:4097/cancel", body.toString(), cb);
+        } catch (Exception e) {
+            main.post(() -> cb.failure(e.toString()));
+        }
+    }
+
+    public void replyAgentPermission(String requestId, String permissionId, boolean allow, Callback cb) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("requestID", requestId);
+            body.put("permissionID", permissionId);
+            body.put("decision", allow ? "allow" : "reject");
+            asyncAbsolute("POST", "http://127.0.0.1:4097/agent/permission", body.toString(), cb);
         } catch (Exception e) {
             main.post(() -> cb.failure(e.toString()));
         }
