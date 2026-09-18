@@ -12,13 +12,15 @@ import hashlib
 import json
 import os
 import stat
+import subprocess
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -123,6 +125,9 @@ def append_history(session_id: str, messages) -> list[dict]:
 
 
 MAX_FILE_BYTES = 2 * 1024 * 1024
+MAX_COMMAND_CHARS = 16384
+MAX_COMMAND_OUTPUT_BYTES = 512 * 1024
+MAX_COMMAND_TIMEOUT_SECONDS = 120
 MAX_SEARCH_FILE_BYTES = 512 * 1024
 SKIP_SEARCH_DIRS = {".git", ".gradle", "build", "node_modules", "__pycache__"}
 
@@ -320,7 +325,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path not in {"/v1/chat/completions", "/history", "/fs/write", "/fs/mkdir"}:
+        if parsed.path not in {"/v1/chat/completions", "/history", "/fs/write", "/fs/mkdir", "/exec"}:
             self.send_json(404, {"error": "not_found"})
             return
 
@@ -331,6 +336,62 @@ class Handler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
             if not isinstance(payload, dict):
                 raise ValueError("request body must be an object")
+
+            if parsed.path == "/exec":
+                root_value = payload.get("root")
+                cwd_value = payload.get("cwd", ".")
+                command = payload.get("command")
+                if not isinstance(command, str) or not command.strip():
+                    raise ValueError("command is required")
+                if len(command) > MAX_COMMAND_CHARS:
+                    raise ValueError("command exceeds length limit")
+                timeout_raw = payload.get("timeoutSeconds", 60)
+                if not isinstance(timeout_raw, int):
+                    raise ValueError("timeoutSeconds must be an integer")
+                timeout_seconds = max(1, min(timeout_raw, MAX_COMMAND_TIMEOUT_SECONDS))
+                root, cwd = workspace_path(root_value, cwd_value)
+                if not cwd.is_dir():
+                    raise ValueError("cwd is not a directory")
+                started = time.monotonic()
+                try:
+                    completed = subprocess.run(
+                        ["/data/data/com.termux/files/usr/bin/sh", "-lc", command],
+                        cwd=str(cwd),
+                        stdin=subprocess.DEVNULL,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        timeout=timeout_seconds,
+                        check=False,
+                    )
+                    timed_out = False
+                    exit_code = completed.returncode
+                    stdout = completed.stdout[:MAX_COMMAND_OUTPUT_BYTES].decode("utf-8", errors="replace")
+                    stderr = completed.stderr[:MAX_COMMAND_OUTPUT_BYTES].decode("utf-8", errors="replace")
+                    stdout_truncated = len(completed.stdout) > MAX_COMMAND_OUTPUT_BYTES
+                    stderr_truncated = len(completed.stderr) > MAX_COMMAND_OUTPUT_BYTES
+                except subprocess.TimeoutExpired as exc:
+                    timed_out = True
+                    exit_code = None
+                    raw_stdout = exc.stdout or b""
+                    raw_stderr = exc.stderr or b""
+                    stdout = raw_stdout[:MAX_COMMAND_OUTPUT_BYTES].decode("utf-8", errors="replace")
+                    stderr = raw_stderr[:MAX_COMMAND_OUTPUT_BYTES].decode("utf-8", errors="replace")
+                    stdout_truncated = len(raw_stdout) > MAX_COMMAND_OUTPUT_BYTES
+                    stderr_truncated = len(raw_stderr) > MAX_COMMAND_OUTPUT_BYTES
+                self.send_json(
+                    200,
+                    {
+                        "cwd": workspace_rel(root, cwd),
+                        "exitCode": exit_code,
+                        "timedOut": timed_out,
+                        "durationMs": int((time.monotonic() - started) * 1000),
+                        "stdout": stdout,
+                        "stderr": stderr,
+                        "stdoutTruncated": stdout_truncated,
+                        "stderrTruncated": stderr_truncated,
+                    },
+                )
+                return
 
             if parsed.path == "/fs/write":
                 root_value = payload.get("root")
