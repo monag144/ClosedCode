@@ -21,7 +21,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.7.1"
+VERSION = "0.7.2"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -794,7 +794,10 @@ class Handler(BaseHTTPRequestHandler):
                 session_id = payload.get("sessionID")
                 request_id = validate_request_id(payload.get("requestID"))
                 root_value = payload.get("root")
+                autonomy = payload.get("autonomy", "ask")
                 messages = payload.get("messages")
+                if autonomy not in {"ask", "yolo"}:
+                    raise ValueError("autonomy must be ask or yolo")
                 if provider_id not in PROVIDERS:
                     raise ValueError("providerID must be nvidia or zai")
                 if not isinstance(model, str) or not model.strip():
@@ -812,16 +815,25 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Connection", "close")
                 self.end_headers()
 
+                autonomy_note = (
+                    "Autonomy mode is YOLO/FULL DANGER ACCESS: do not ask for routine project-development approval. "
+                    "Continue through ordinary inspect/edit/build/test/diagnose/repair loops independently. "
+                    "This does not expand task scope: do not damage Android/system paths, Termux internals, unrelated "
+                    "repositories, personal files, credentials, or protected GPT-Termux-Relay infrastructure. "
+                    if autonomy == "yolo"
+                    else
+                    "Autonomy mode is ASK/GUARDED: mutating tools may require explicit user approval. "
+                )
                 system = {
                     "role": "system",
                     "content": (
                         "You are ClosedCode, an on-device coding agent. Use the provided tools to inspect, "
                         "modify, build, test, and diagnose the selected workspace. Never claim a file was "
                         "changed or a command was run unless you actually used the corresponding tool. "
-                        "Keep actions scoped to the user's request and selected workspace. Prefer inspecting "
-                        "before editing. Avoid destructive shell commands unless the user explicitly asked "
-                        "for destructive work. When the task is complete, answer concisely with what changed "
-                        "and any important test result."
+                        "Keep actions scoped to the user's assigned development task and selected workspace. "
+                        "Prefer inspecting before editing. " + autonomy_note +
+                        "When the task is complete, inspect the resulting changes and answer concisely with what "
+                        "changed and meaningful test/build results."
                     ),
                 }
                 conversation = [system] + load_history(session_id) + current_history_messages
@@ -878,7 +890,7 @@ class Handler(BaseHTTPRequestHandler):
                                     name = "unknown"
                                 try:
                                     arguments = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
-                                    if name in AGENT_APPROVAL_TOOLS:
+                                    if name in AGENT_APPROVAL_TOOLS and autonomy != "yolo":
                                         permission_id = agent_permission_id(request_id, call_id, round_index)
                                         agent_permission_register(permission_id, request_id)
                                         try:
