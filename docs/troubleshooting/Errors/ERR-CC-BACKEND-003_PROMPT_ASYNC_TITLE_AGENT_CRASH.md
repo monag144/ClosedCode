@@ -1,7 +1,7 @@
 # ERR-CC-BACKEND-003 — prompt_async dies during automatic title generation
 
 **Tag:** `CC-PROMPT-ASYNC-TITLE-AGENT-CRASH`  
-**Status:** ACTIVE INVESTIGATION  
+**Status:** PROVED / CLIENT WORKAROUND SELECTED  
 **Date:** 2026-09-18
 
 ## Symptom
@@ -41,3 +41,12 @@ Create a disposable session with an explicit non-default title so `SessionPrompt
 - session status
 
 If the titled session succeeds, isolate the fault to automatic title generation and select the smallest compatibility repair.
+
+
+## Op174 proof
+
+A disposable session created with an explicit non-default title skipped the automatic title-generation path and completed successfully on the first poll using the exact NVIDIA target `nvidia/nemotron-3-ultra-550b-a55b`.
+
+This proves the main NVIDIA prompt path is functional and isolates the failure to automatic first-turn title generation on default-titled sessions.
+
+The selected ClosedCode compatibility repair is client-side: create sessions with a non-default placeholder title and replace that placeholder with a deterministic title derived from the first user prompt before dispatch. This avoids modifying or restarting the protected native OpenCode backend.
