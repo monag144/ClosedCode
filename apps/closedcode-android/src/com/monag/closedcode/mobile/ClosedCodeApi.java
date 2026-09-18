@@ -128,6 +128,24 @@ public final class ClosedCodeApi {
         }
     }
 
+    public void passthroughPrompt(String text, String providerId, String modelId, Callback cb) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("providerID", providerId);
+            body.put("model", modelId);
+            JSONArray messages = new JSONArray();
+            JSONObject message = new JSONObject();
+            message.put("role", "user");
+            message.put("content", text);
+            messages.put(message);
+            body.put("messages", messages);
+            body.put("stream", false);
+            asyncAbsolute("POST", "http://127.0.0.1:4097/v1/chat/completions", body.toString(), cb);
+        } catch (Exception e) {
+            main.post(() -> cb.failure(e.toString()));
+        }
+    }
+
     public void abort(String sessionId, String directory, Callback cb) {
         async("POST", "/session/" + enc(sessionId) + "/abort?" + routing(directory), null, cb);
     }
@@ -228,9 +246,13 @@ public final class ClosedCodeApi {
     }
 
     private void async(String method, String path, String body, Callback cb) {
+        asyncAbsolute(method, baseUrl + path, body, cb);
+    }
+
+    private void asyncAbsolute(String method, String url, String body, Callback cb) {
         pool.execute(() -> {
             try {
-                String result = request(method, path, body);
+                String result = requestAbsolute(method, url, body);
                 main.post(() -> cb.success(result));
             } catch (Exception e) {
                 String msg = e.getMessage() == null ? e.toString() : e.getMessage();
@@ -240,7 +262,11 @@ public final class ClosedCodeApi {
     }
 
     private String request(String method, String path, String body) throws Exception {
-        HttpURLConnection c = (HttpURLConnection) new URL(baseUrl + path).openConnection();
+        return requestAbsolute(method, baseUrl + path, body);
+    }
+
+    private String requestAbsolute(String method, String url, String body) throws Exception {
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         c.setRequestMethod(method);
         c.setRequestProperty("Accept", "application/json");
         c.setConnectTimeout(6000);

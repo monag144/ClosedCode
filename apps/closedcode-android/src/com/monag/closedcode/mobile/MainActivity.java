@@ -893,6 +893,13 @@ public final class MainActivity extends Activity {
     }
 
     private void dispatchPrompt(String expectedId, String text) {
+        String providerId = composerUi.providerId();
+        String modelId = composerUi.modelId();
+        if (isPassthroughProvider(providerId) && modelId != null && !modelId.trim().isEmpty()) {
+            dispatchPassthroughPrompt(expectedId, text, providerId, modelId);
+            return;
+        }
+
         toolStatus.setText("Sending…");
         setPromptRunning(true);
         api.promptAsync(
@@ -918,6 +925,44 @@ public final class MainActivity extends Activity {
                 setPromptRunning(false);
                 toolStatus.setText("Error");
                 addMessageBubble("system", "Prompt failed: " + message);
+            }
+        });
+    }
+
+    private static boolean isPassthroughProvider(String providerId) {
+        return "nvidia".equals(providerId) || "zai".equals(providerId);
+    }
+
+    private void dispatchPassthroughPrompt(String expectedId, String text, String providerId, String modelId) {
+        toolStatus.setText("Passthrough · " + providerId);
+        setPromptRunning(true);
+        api.passthroughPrompt(text, providerId, modelId, new ClosedCodeApi.Callback() {
+            @Override public void success(String body) {
+                if (!expectedId.equals(currentSessionId)) return;
+                try {
+                    JSONObject root = new JSONObject(body);
+                    JSONArray choices = root.optJSONArray("choices");
+                    JSONObject choice = choices == null || choices.length() == 0 ? null : choices.optJSONObject(0);
+                    JSONObject message = choice == null ? null : choice.optJSONObject("message");
+                    String content = message == null ? "" : message.optString("content", "");
+                    if (content.trim().isEmpty() && message != null) {
+                        content = message.optString("reasoning_content", "");
+                    }
+                    if (content.trim().isEmpty()) content = "Provider returned no visible text.";
+                    addMessageBubble("assistant", content);
+                    toolStatus.setText("Passthrough complete");
+                } catch (Exception e) {
+                    addMessageBubble("system", "Passthrough response parse failed: " + e.getMessage());
+                    toolStatus.setText("Error");
+                }
+                setPromptRunning(false);
+            }
+
+            @Override public void failure(String message) {
+                if (!expectedId.equals(currentSessionId)) return;
+                setPromptRunning(false);
+                toolStatus.setText("Passthrough error");
+                addMessageBubble("system", "Passthrough failed: " + message);
             }
         });
     }
