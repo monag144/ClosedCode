@@ -18,7 +18,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.2.1"
+VERSION = "0.3.0"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -122,6 +122,39 @@ def append_history(session_id: str, messages) -> list[dict]:
     return history
 
 
+MAX_FILE_BYTES = 2 * 1024 * 1024
+MAX_SEARCH_FILE_BYTES = 512 * 1024
+SKIP_SEARCH_DIRS = {".git", ".gradle", "build", "node_modules", "__pycache__"}
+
+
+def workspace_root(value: str) -> Path:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("root is required")
+    root = Path(value).expanduser().resolve()
+    if not root.is_dir():
+        raise ValueError("root must be an existing directory")
+    return root
+
+
+def workspace_path(root_value: str, path_value: str, allow_missing: bool = False):
+    root = workspace_root(root_value)
+    if not isinstance(path_value, str) or not path_value or len(path_value) > 4096:
+        raise ValueError("path is required")
+    raw = Path(path_value).expanduser()
+    target = (raw if raw.is_absolute() else root / raw).resolve(strict=False)
+    try:
+        target.relative_to(root)
+    except ValueError:
+        raise ValueError("path escapes workspace")
+    if not allow_missing and not target.exists():
+        raise FileNotFoundError("path does not exist")
+    return root, target
+
+
+def workspace_rel(root: Path, target: Path) -> str:
+    return "." if target == root else target.relative_to(root).as_posix()
+
+
 def provider_status() -> dict[str, bool]:
     try:
         data = load_auth()
@@ -174,6 +207,85 @@ class Handler(BaseHTTPRequestHandler):
                     {"error": "history_failure", "message": exc.__class__.__name__},
                 )
             return
+        if parsed.path in {"/fs/list", "/fs/read", "/fs/search"}:
+            try:
+                query = parse_qs(parsed.query)
+                root_value = (query.get("root") or [""])[0]
+                if parsed.path == "/fs/list":
+                    path_value = (query.get("path") or ["."])[0]
+                    root, target = workspace_path(root_value, path_value)
+                    if not target.is_dir():
+                        raise ValueError("path is not a directory")
+                    items = []
+                    for child in sorted(target.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower())):
+                        try:
+                            entry = {
+                                "name": child.name,
+                                "path": workspace_rel(root, child),
+                                "type": "directory" if child.is_dir() else "file",
+                            }
+                            if child.is_file():
+                                entry["size"] = child.stat().st_size
+                            items.append(entry)
+                        except OSError:
+                            continue
+                    self.send_json(200, {"path": workspace_rel(root, target), "items": items})
+                    return
+                if parsed.path == "/fs/read":
+                    path_value = (query.get("path") or [""])[0]
+                    root, target = workspace_path(root_value, path_value)
+                    if not target.is_file():
+                        raise ValueError("path is not a file")
+                    size = target.stat().st_size
+                    if size > MAX_FILE_BYTES:
+                        raise ValueError("file exceeds read limit")
+                    try:
+                        content = target.read_text(encoding="utf-8")
+                    except UnicodeDecodeError:
+                        raise ValueError("file is not UTF-8 text")
+                    self.send_json(200, {"path": workspace_rel(root, target), "bytes": size, "content": content})
+                    return
+                needle = (query.get("query") or [""])[0]
+                if not needle:
+                    raise ValueError("query is required")
+                try:
+                    limit = max(1, min(int((query.get("limit") or ["100"])[0]), 200))
+                except ValueError:
+                    raise ValueError("invalid limit")
+                root = workspace_root(root_value)
+                folded = needle.casefold()
+                results = []
+                for base, dirs, files in os.walk(root):
+                    dirs[:] = [name for name in dirs if name not in SKIP_SEARCH_DIRS]
+                    base_path = Path(base)
+                    for name in files:
+                        path = base_path / name
+                        try:
+                            rel = workspace_rel(root, path)
+                            if folded in rel.casefold():
+                                results.append({"path": rel, "line": 0, "preview": rel})
+                                if len(results) >= limit:
+                                    break
+                            if path.stat().st_size > MAX_SEARCH_FILE_BYTES:
+                                continue
+                            text = path.read_text(encoding="utf-8")
+                        except (OSError, UnicodeDecodeError):
+                            continue
+                        for number, line in enumerate(text.splitlines(), 1):
+                            if folded in line.casefold():
+                                results.append({"path": rel, "line": number, "preview": line[:240]})
+                                if len(results) >= limit:
+                                    break
+                        if len(results) >= limit:
+                            break
+                    if len(results) >= limit:
+                        break
+                self.send_json(200, {"query": needle, "results": results, "truncated": len(results) >= limit})
+            except (ValueError, FileNotFoundError) as exc:
+                self.send_json(400, {"error": "invalid_request", "message": str(exc)})
+            except Exception as exc:
+                self.send_json(500, {"error": "filesystem_failure", "message": exc.__class__.__name__})
+            return
         if self.path == "/health":
             self.send_json(
                 200,
@@ -208,7 +320,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path not in {"/v1/chat/completions", "/history"}:
+        if parsed.path not in {"/v1/chat/completions", "/history", "/fs/write", "/fs/mkdir"}:
             self.send_json(404, {"error": "not_found"})
             return
 
@@ -219,6 +331,40 @@ class Handler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
             if not isinstance(payload, dict):
                 raise ValueError("request body must be an object")
+
+            if parsed.path == "/fs/write":
+                root_value = payload.get("root")
+                path_value = payload.get("path")
+                content = payload.get("content")
+                if not isinstance(content, str):
+                    raise ValueError("content must be text")
+                encoded_content = content.encode("utf-8")
+                if len(encoded_content) > MAX_FILE_BYTES:
+                    raise ValueError("file exceeds write limit")
+                root, target = workspace_path(root_value, path_value, allow_missing=True)
+                if target.exists() and not target.is_file():
+                    raise ValueError("path is not a file")
+                if not target.parent.is_dir():
+                    raise ValueError("parent directory does not exist")
+                temp = target.with_name(target.name + ".closedcode.tmp")
+                if temp.exists():
+                    raise ValueError("temporary write path already exists")
+                temp.write_bytes(encoded_content)
+                os.chmod(temp, stat.S_IMODE(target.stat().st_mode) if target.exists() else 0o600)
+                os.replace(temp, target)
+                self.send_json(200, {"path": workspace_rel(root, target), "bytes": len(encoded_content)})
+                return
+
+            if parsed.path == "/fs/mkdir":
+                root_value = payload.get("root")
+                path_value = payload.get("path")
+                parents = bool(payload.get("parents", False))
+                root, target = workspace_path(root_value, path_value, allow_missing=True)
+                if target.exists():
+                    raise ValueError("path already exists")
+                target.mkdir(parents=parents, mode=0o700)
+                self.send_json(200, {"path": workspace_rel(root, target), "created": True})
+                return
 
             if parsed.path == "/history":
                 session_id = payload.get("sessionID")
