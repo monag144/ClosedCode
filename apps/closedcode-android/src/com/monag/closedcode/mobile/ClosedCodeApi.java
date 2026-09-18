@@ -128,11 +128,12 @@ public final class ClosedCodeApi {
         }
     }
 
-    public void passthroughPrompt(String text, String providerId, String modelId, Callback cb) {
+    public void passthroughPrompt(String sessionId, String text, String providerId, String modelId, Callback cb) {
         try {
             JSONObject body = new JSONObject();
             body.put("providerID", providerId);
             body.put("model", modelId);
+            body.put("sessionID", sessionId);
             JSONArray messages = new JSONArray();
             JSONObject message = new JSONObject();
             message.put("role", "user");
@@ -141,6 +142,30 @@ public final class ClosedCodeApi {
             body.put("messages", messages);
             body.put("stream", false);
             asyncAbsolute("POST", "http://127.0.0.1:4097/v1/chat/completions", body.toString(), cb);
+        } catch (Exception e) {
+            main.post(() -> cb.failure(e.toString()));
+        }
+    }
+
+    public void passthroughHistory(String sessionId, Callback cb) {
+        asyncAbsolute(
+                "GET",
+                "http://127.0.0.1:4097/history?sessionID=" + enc(sessionId),
+                null,
+                cb);
+    }
+
+    public void appendPassthroughHistory(String sessionId, String role, String content, Callback cb) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("sessionID", sessionId);
+            JSONArray messages = new JSONArray();
+            JSONObject message = new JSONObject();
+            message.put("role", role);
+            message.put("content", content);
+            messages.put(message);
+            body.put("messages", messages);
+            asyncAbsolute("POST", "http://127.0.0.1:4097/history", body.toString(), cb);
         } catch (Exception e) {
             main.post(() -> cb.failure(e.toString()));
         }
