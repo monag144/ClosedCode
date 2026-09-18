@@ -50,3 +50,14 @@ The build qualification emitted an `aapt` architecture warning because the newes
 ## Next bounded work
 
 Start Op176 by inspecting the preserved backend log for the failed Op175 tool session `ses_f4ddbd413ffeWuzZNjGLsEaxas` and the NVIDIA model capability metadata. Determine whether the failure is model tool-call capability/behavior, permission/tool registration, or another runtime error before mutating Android or backend configuration.
+
+
+## Governance correction
+
+The original governance statement above — `Stabilization Ops176–200 may proceed under the already-authorized roadmap; no new Director approval gate exists at Op175.` — is preserved as the historical Heavy Engineer 7 conclusion, but it was **incorrect**.
+
+With Op150 as the completed 25-operation anchor, Op175 is the next mandatory twenty-five-operation hard checkpoint. The roadmap's `Ops176–200` stabilization range describes scope after authorization; it does not release the Op175 checkpoint. Fresh Director authorization is required before any Op176 substantive **or preparatory** work.
+
+`scripts/closedcode/op176-tool-isolation.sh` was authored before that release and therefore constitutes unauthorized Op176 preparation. Preserve it as incident evidence; do not execute it unless a future Director release authorizes Op176 and the script is first revalidated against current state.
+
+No evidence in this correction establishes that an Op176 Relay action was actually issued.
