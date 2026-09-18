@@ -13,6 +13,7 @@ import org.json.JSONObject;
 import java.text.DateFormat;
 import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
@@ -706,7 +707,7 @@ public final class ComposerUiController {
     }
 
     private static void sortVariants(List<String> variants) {
-        final List<String> order = List.of("none", "minimal", "low", "medium", "high", "xhigh", "max", "thinking");
+        final List<String> order = Arrays.asList("none", "minimal", "low", "medium", "high", "xhigh", "max", "thinking");
         Collections.sort(variants, (a, b) -> {
             int ia = order.indexOf(a);
             int ib = order.indexOf(b);
