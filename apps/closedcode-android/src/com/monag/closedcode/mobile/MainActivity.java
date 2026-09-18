@@ -59,6 +59,7 @@ public final class MainActivity extends Activity {
     private TextView effortChip;
     private TextView voiceButton;
     private TextView toolStatus;
+    private ContextUsageView usageButton;
     private EditText composer;
     private EditText serverUrlInput;
     private EditText directoryInput;
@@ -72,6 +73,7 @@ public final class MainActivity extends Activity {
 
     private SharedPreferences prefs;
     private ClosedCodeApi api;
+    private ComposerUiController composerUi;
     private String directory;
     private String currentSessionId;
     private boolean serverHealthy;
@@ -117,11 +119,16 @@ public final class MainActivity extends Activity {
         api = new ClosedCodeApi(url);
 
         bindViews();
+        composerUi = new ComposerUiController(
+                this,
+                api,
+                prefs,
+                modelChip,
+                agentChip,
+                effortChip,
+                usageButton,
+                directory);
         bindActions();
-        selectedAgent = prefs.getString("selectedAgent", "build");
-        String savedVariant = prefs.getString("selectedVariant", "auto");
-        selectedVariant = "auto".equals(savedVariant) ? null : savedVariant;
-        updateComposerControlLabels();
         serverUrlInput.setText(url);
         directoryInput.setText(directory);
         workspacePath.setText(shortPath(directory));
@@ -160,6 +167,7 @@ public final class MainActivity extends Activity {
         effortChip = findViewById(R.id.effortChip);
         voiceButton = findViewById(R.id.voiceButton);
         toolStatus = findViewById(R.id.toolStatus);
+        usageButton = findViewById(R.id.usageButton);
         composer = findViewById(R.id.composer);
         serverUrlInput = findViewById(R.id.serverUrlInput);
         directoryInput = findViewById(R.id.directoryInput);
@@ -183,9 +191,10 @@ public final class MainActivity extends Activity {
         findViewById(R.id.diffButton).setOnClickListener(v -> showDiff());
         findViewById(R.id.saveBackend).setOnClickListener(v -> saveBackend());
         findViewById(R.id.serverStrip).setOnClickListener(v -> showPage("connections"));
-        modelChip.setOnClickListener(v -> showProviderPicker());
-        agentChip.setOnClickListener(v -> showAgentPicker());
-        effortChip.setOnClickListener(v -> showEffortPicker());
+        modelChip.setOnClickListener(v -> composerUi.showModelPicker());
+        agentChip.setOnClickListener(v -> composerUi.showAgentPicker());
+        effortChip.setOnClickListener(v -> composerUi.showEffortPicker());
+        usageButton.setOnClickListener(v -> composerUi.showUsage());
         voiceButton.setOnClickListener(v -> startVoiceInput());
         bindToggle(R.id.biometricRow, biometricSwitch, "requireBiometrics", false, false);
         bindToggle(R.id.hidePreviewRow, hidePreviewSwitch, "hideAppPreview", false, true);
@@ -240,7 +249,7 @@ public final class MainActivity extends Activity {
 
     private void refreshEverything() {
         refreshHealth();
-        refreshProviders();
+        composerUi.refresh(directory);
         refreshSessions();
     }
 
@@ -647,7 +656,7 @@ public final class MainActivity extends Activity {
         bottomNav.setVisibility(View.GONE);
         chatTitle.setText(title);
         chatWorkspace.setText(shortPath(directory));
-        modelChip.setText("Model: " + lastModelLabel);
+        composerUi.openSession(id, directory);
         toolStatus.setText("Syncing…");
         loadMessages();
         startEventStream();
@@ -656,6 +665,7 @@ public final class MainActivity extends Activity {
 
     private void closeChat() {
         api.stopEvents();
+        composerUi.closeSession();
         currentSessionId = null;
         showPage("sessions");
     }
@@ -666,6 +676,7 @@ public final class MainActivity extends Activity {
         api.messages(expectedId, directory, new ClosedCodeApi.Callback() {
             @Override public void success(String body) {
                 if (!expectedId.equals(currentSessionId)) return;
+                composerUi.onMessagesLoaded(body);
                 renderMessages(body);
                 toolStatus.setText("Idle");
             }
@@ -754,7 +765,15 @@ public final class MainActivity extends Activity {
         addMessageBubble("user", text);
         toolStatus.setText("Sending…");
         final String expectedId = currentSessionId;
-        api.promptAsync(expectedId, directory, text, selectedProviderId, selectedModelId, selectedAgent, selectedVariant, new ClosedCodeApi.Callback() {
+        api.promptAsync(
+                expectedId,
+                directory,
+                text,
+                composerUi.providerId(),
+                composerUi.modelId(),
+                composerUi.agent(),
+                composerUi.variant(),
+                new ClosedCodeApi.Callback() {
             @Override public void success(String body) {
                 if (!expectedId.equals(currentSessionId)) return;
                 toolStatus.setText("Running…");
