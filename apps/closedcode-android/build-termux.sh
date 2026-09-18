@@ -3,7 +3,7 @@ set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
 BUILD="$ROOT/build"
-OUT_NAME="ClosedCode-cleanroom-v0.1.8-debug.apk"
+OUT_NAME="ClosedCode-cleanroom-v0.1.9-debug.apk"
 
 find_sdk() {
   if [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME/platforms" ]; then
@@ -67,8 +67,8 @@ set -- "$BUILD"/compiled/*.flat
   --java "$BUILD/gen" \
   --min-sdk-version 26 \
   --target-sdk-version 34 \
-  --version-code 10 \
-  --version-name "0.1.8-cleanroom" \
+  --version-code 11 \
+  --version-name "0.1.9-cleanroom" \
   --auto-add-overlay \
   "$@"
 
@@ -129,7 +129,7 @@ echo "BUILD_TOOLS=$BUILD_TOOLS"
 echo "AAPT2=$AAPT2"
 echo "ZIPALIGN=$ZIPALIGN"
 echo "PACKAGE=com.monag.closedcode.mobile"
-echo "VERSION_NAME=0.1.8-cleanroom"
+echo "VERSION_NAME=0.1.9-cleanroom"
 echo "APK=$SHARED_OUT"
 echo "APK_BYTES=$(wc -c < "$SHARED_OUT")"
 echo "APK_SHA256=$(sha256sum "$SHARED_OUT" | awk '{print $1}')"
