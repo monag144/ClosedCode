@@ -88,7 +88,7 @@ def main() -> int:
     stamp = str(int(time.time() * 1000))
     for provider, model in CASES:
         filename = f"{provider}_agent.txt"
-        expected = f"TOOL_LOOP_OK_{provider.upper()}\n"
+        expected = f"TOOL_LOOP_OK_{provider.upper()}"
         result = run_agent(
             provider,
             model,
@@ -96,7 +96,7 @@ def main() -> int:
             f"op237-{provider}-write-{stamp}",
             (
                 f"You are qualifying the ClosedCode agent loop. You MUST call workspace_write "
-                f"to create {filename} with exactly this content including the newline: "
+                f"to create {filename} with exactly this content and no trailing newline: "
                 f"{expected!r} with no trailing newline. Then call workspace_read on that file to verify it. "
                 "After the tool work succeeds, reply with exactly AGENT_DONE."
             ),
