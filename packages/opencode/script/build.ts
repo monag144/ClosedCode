@@ -168,7 +168,7 @@ for (const item of targets) {
     format: "esm",
     minify: true,
     sourcemap: sourcemapsFlag ? "linked" : "none",
-    splitting: true,
+    // ClosedCode Android/Bionic qualification: Bun 1.4.1 with splitting:true reproduced\n    // the internal reference/agent failure; the same source with splitting:false passed.\n    splitting: false,
     compile: {
       autoloadBunfig: false,
       autoloadDotenv: false,
