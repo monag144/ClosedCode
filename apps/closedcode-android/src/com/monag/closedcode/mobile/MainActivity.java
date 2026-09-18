@@ -1185,10 +1185,12 @@ public final class MainActivity extends Activity {
     }
 
     private void showFiles(String path) {
-        api.listFiles(directory, path, new ClosedCodeApi.Callback() {
+        api.workspaceList(directory, path, new ClosedCodeApi.Callback() {
             @Override public void success(String body) {
                 try {
-                    JSONArray arr = new JSONArray(body);
+                    JSONObject root = new JSONObject(body);
+                    JSONArray arr = root.optJSONArray("items");
+                    if (arr == null) arr = new JSONArray();
                     List<JSONObject> nodes = new ArrayList<>();
                     List<String> labels = new ArrayList<>();
                     if (!".".equals(path) && !path.isEmpty()) {
@@ -1201,9 +1203,10 @@ public final class MainActivity extends Activity {
                     }
                     for (int i = 0; i < arr.length(); i++) {
                         JSONObject node = arr.optJSONObject(i);
-                        if (node == null || node.optBoolean("ignored", false)) continue;
+                        if (node == null) continue;
                         nodes.add(node);
-                        labels.add(("directory".equals(node.optString("type")) ? "▸  " : "   ") + node.optString("name", node.optString("path")));
+                        labels.add(("directory".equals(node.optString("type")) ? "▸  " : "   ")
+                                + node.optString("name", node.optString("path")));
                     }
                     new AlertDialog.Builder(MainActivity.this)
                             .setTitle("Files · " + path)
@@ -1213,6 +1216,8 @@ public final class MainActivity extends Activity {
                                 if ("directory".equals(node.optString("type"))) showFiles(nodePath);
                                 else showFile(nodePath);
                             })
+                            .setPositiveButton("New", (dialog, which) -> showCreateEntry(path))
+                            .setNeutralButton("Search", (dialog, which) -> showWorkspaceSearch())
                             .setNegativeButton("Close", null)
                             .show();
                 } catch (Exception e) {
@@ -1224,24 +1229,144 @@ public final class MainActivity extends Activity {
     }
 
     private void showFile(String path) {
-        api.readFile(directory, path, new ClosedCodeApi.Callback() {
+        api.workspaceRead(directory, path, new ClosedCodeApi.Callback() {
             @Override public void success(String body) {
                 try {
                     JSONObject obj = new JSONObject(body);
-                    String content = obj.optString("content", body);
-                    TextView text = simpleText(content, 12, R.color.cc_text);
-                    text.setTextIsSelectable(true);
-                    text.setPadding(dp(16), dp(10), dp(16), dp(10));
+                    String content = obj.optString("content", "");
+                    EditText editor = new EditText(MainActivity.this);
+                    editor.setText(content);
+                    editor.setTextColor(getColor(R.color.cc_text));
+                    editor.setTextSize(12);
+                    editor.setGravity(Gravity.TOP | Gravity.START);
+                    editor.setMinLines(12);
+                    editor.setPadding(dp(14), dp(12), dp(14), dp(12));
+                    editor.setHorizontallyScrolling(false);
                     ScrollView scroll = new ScrollView(MainActivity.this);
                     scroll.setBackgroundColor(getColor(R.color.cc_bg));
-                    scroll.addView(text);
-                    new AlertDialog.Builder(MainActivity.this).setTitle(path).setView(scroll).setPositiveButton("Done", null).show();
+                    scroll.addView(editor);
+                    new AlertDialog.Builder(MainActivity.this)
+                            .setTitle(path)
+                            .setView(scroll)
+                            .setPositiveButton("Save", (dialog, which) ->
+                                    saveWorkspaceFile(path, editor.getText().toString()))
+                            .setNegativeButton("Close", null)
+                            .show();
                 } catch (Exception e) {
                     toast("Read: " + e.getMessage());
                 }
             }
             @Override public void failure(String message) { toast("Read: " + message); }
         });
+    }
+
+    private void saveWorkspaceFile(String path, String content) {
+        toolStatus.setText("Saving…");
+        api.workspaceWrite(directory, path, content, new ClosedCodeApi.Callback() {
+            @Override public void success(String body) {
+                toolStatus.setText("Saved");
+                toast("Saved " + path);
+            }
+            @Override public void failure(String message) {
+                toolStatus.setText("Save failed");
+                toast("Save: " + message);
+            }
+        });
+    }
+
+    private void showCreateEntry(String parent) {
+        EditText input = new EditText(this);
+        input.setHint("name");
+        new AlertDialog.Builder(this)
+                .setTitle("Create in " + parent)
+                .setView(input)
+                .setPositiveButton("File", (dialog, which) -> {
+                    String name = input.getText().toString().trim();
+                    if (name.isEmpty()) return;
+                    String path = childPath(parent, name);
+                    api.workspaceWrite(directory, path, "", new ClosedCodeApi.Callback() {
+                        @Override public void success(String body) {
+                            toast("Created " + path);
+                            showFile(path);
+                        }
+                        @Override public void failure(String message) { toast("Create file: " + message); }
+                    });
+                })
+                .setNeutralButton("Folder", (dialog, which) -> {
+                    String name = input.getText().toString().trim();
+                    if (name.isEmpty()) return;
+                    String path = childPath(parent, name);
+                    api.workspaceMkdir(directory, path, new ClosedCodeApi.Callback() {
+                        @Override public void success(String body) {
+                            toast("Created " + path);
+                            showFiles(path);
+                        }
+                        @Override public void failure(String message) { toast("Create folder: " + message); }
+                    });
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void showWorkspaceSearch() {
+        EditText input = new EditText(this);
+        input.setHint("Search project files");
+        new AlertDialog.Builder(this)
+                .setTitle("Workspace search")
+                .setView(input)
+                .setPositiveButton("Search", (dialog, which) -> {
+                    String query = input.getText().toString().trim();
+                    if (!query.isEmpty()) runWorkspaceSearch(query);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void runWorkspaceSearch(String query) {
+        toolStatus.setText("Searching…");
+        api.workspaceSearch(directory, query, new ClosedCodeApi.Callback() {
+            @Override public void success(String body) {
+                try {
+                    JSONObject root = new JSONObject(body);
+                    JSONArray results = root.optJSONArray("results");
+                    if (results == null || results.length() == 0) {
+                        toolStatus.setText("Idle");
+                        toast("No matches for " + query);
+                        return;
+                    }
+                    String[] labels = new String[results.length()];
+                    String[] paths = new String[results.length()];
+                    for (int i = 0; i < results.length(); i++) {
+                        JSONObject item = results.optJSONObject(i);
+                        if (item == null) continue;
+                        paths[i] = item.optString("path", "");
+                        int line = item.optInt("line", 0);
+                        String preview = item.optString("preview", "");
+                        labels[i] = paths[i] + (line > 0 ? ":" + line : "") + "\n" + trim(preview, 100);
+                    }
+                    toolStatus.setText("Idle");
+                    new AlertDialog.Builder(MainActivity.this)
+                            .setTitle("Search · " + query)
+                            .setItems(labels, (dialog, which) -> {
+                                if (paths[which] != null && !paths[which].isEmpty()) showFile(paths[which]);
+                            })
+                            .setNegativeButton("Close", null)
+                            .show();
+                } catch (Exception e) {
+                    toolStatus.setText("Search error");
+                    toast("Search: " + e.getMessage());
+                }
+            }
+            @Override public void failure(String message) {
+                toolStatus.setText("Search failed");
+                toast("Search: " + message);
+            }
+        });
+    }
+
+    private String childPath(String parent, String name) {
+        if (parent == null || parent.isEmpty() || ".".equals(parent)) return name;
+        return parent.endsWith("/") ? parent + name : parent + "/" + name;
     }
 
     private void showDiff() {
