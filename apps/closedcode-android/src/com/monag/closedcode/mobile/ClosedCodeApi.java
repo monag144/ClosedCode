@@ -35,6 +35,14 @@ public final class ClosedCodeApi {
         void failure(String message);
     }
 
+    public interface AgentStreamListener {
+        void delta(String text);
+        void tool(String name, String status, String detail);
+        void error(String message);
+        void complete(boolean cancelled);
+        void failure(String message);
+    }
+
     private final ExecutorService pool = Executors.newFixedThreadPool(4);
     private final Handler main = new Handler(Looper.getMainLooper());
     private volatile String baseUrl;
@@ -221,6 +229,110 @@ public final class ClosedCodeApi {
                     if (delta == null) continue;
                     String piece = delta.optString("content", "");
                     if (piece.isEmpty()) piece = delta.optString("reasoning_content", "");
+                    if (!piece.isEmpty()) {
+                        String finalPiece = piece;
+                        main.post(() -> listener.delta(finalPiece));
+                    }
+                }
+                if (!terminal) {
+                    terminal = true;
+                    main.post(() -> listener.complete(false));
+                }
+            } catch (Exception e) {
+                String msg = e.getMessage() == null ? e.toString() : e.getMessage();
+                if (!terminal) main.post(() -> listener.failure(msg));
+            } finally {
+                if (c != null) c.disconnect();
+                if (requestId.equals(providerStreamRequestId)) {
+                    providerStreamConnection = null;
+                    providerStreamRequestId = null;
+                }
+            }
+        });
+    }
+
+    public void streamAgentPrompt(
+            String sessionId,
+            String root,
+            String text,
+            String providerId,
+            String modelId,
+            String requestId,
+            AgentStreamListener listener) {
+        pool.execute(() -> {
+            HttpURLConnection c = null;
+            boolean terminal = false;
+            try {
+                JSONObject body = new JSONObject();
+                body.put("providerID", providerId);
+                body.put("model", modelId);
+                body.put("sessionID", sessionId);
+                body.put("requestID", requestId);
+                body.put("root", root);
+                JSONArray messages = new JSONArray();
+                JSONObject message = new JSONObject();
+                message.put("role", "user");
+                message.put("content", text);
+                messages.put(message);
+                body.put("messages", messages);
+
+                c = (HttpURLConnection) new URL("http://127.0.0.1:4097/agent").openConnection();
+                providerStreamConnection = c;
+                providerStreamRequestId = requestId;
+                c.setRequestMethod("POST");
+                c.setRequestProperty("Accept", "text/event-stream");
+                c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                c.setConnectTimeout(6000);
+                c.setReadTimeout(0);
+                c.setDoOutput(true);
+                byte[] data = body.toString().getBytes(StandardCharsets.UTF_8);
+                c.setFixedLengthStreamingMode(data.length);
+                try (OutputStream out = c.getOutputStream()) {
+                    out.write(data);
+                }
+
+                int code = c.getResponseCode();
+                if (code < 200 || code >= 300) {
+                    String response = read(c.getErrorStream());
+                    throw new IllegalStateException("HTTP " + code + (response.isEmpty() ? "" : ": " + response));
+                }
+
+                BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8));
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (!line.startsWith("data:")) continue;
+                    String payload = line.substring(5).trim();
+                    if (payload.isEmpty() || "[DONE]".equals(payload)) continue;
+                    JSONObject event = new JSONObject(payload);
+                    JSONObject closedCode = event.optJSONObject("closedcode");
+                    if (closedCode != null) {
+                        String type = closedCode.optString("type", "");
+                        if ("tool".equals(type)) {
+                            String name = closedCode.optString("name", "tool");
+                            String status = closedCode.optString("status", "running");
+                            String detail = closedCode.optString("detail", "");
+                            main.post(() -> listener.tool(name, status, detail));
+                            continue;
+                        }
+                        if ("error".equals(type)) {
+                            String messageText = closedCode.optString("message", "Agent error");
+                            main.post(() -> listener.error(messageText));
+                            continue;
+                        }
+                        if (closedCode.optBoolean("complete", false)) {
+                            boolean cancelled = closedCode.optBoolean("cancelled", false);
+                            terminal = true;
+                            main.post(() -> listener.complete(cancelled));
+                            break;
+                        }
+                    }
+
+                    JSONArray choices = event.optJSONArray("choices");
+                    JSONObject choice = choices == null ? null : choices.optJSONObject(0);
+                    JSONObject delta = choice == null ? null : choice.optJSONObject("delta");
+                    if (delta == null) continue;
+                    String piece = delta.optString("content", "");
                     if (!piece.isEmpty()) {
                         String finalPiece = piece;
                         main.post(() -> listener.delta(finalPiece));
