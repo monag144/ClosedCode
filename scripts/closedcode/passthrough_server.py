@@ -24,7 +24,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.8.6"
+VERSION = "0.8.7"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -526,6 +526,11 @@ def workspace_rel(root: Path, target: Path) -> str:
 AGENT_EMERGENCY_MAX_ROUNDS_DEFAULT = 4096
 AGENT_EMERGENCY_MAX_ROUNDS_MIN = 128
 AGENT_EMERGENCY_MAX_ROUNDS_MAX = 100000
+AGENT_CONTEXT_COMPACT_AFTER_CHARS_DEFAULT = 280000
+AGENT_CONTEXT_COMPACT_AFTER_CHARS_MIN = 65536
+AGENT_CONTEXT_COMPACT_AFTER_CHARS_MAX = 4000000
+AGENT_CONTEXT_KEEP_RECENT_MESSAGES = 48
+AGENT_CONTEXT_EVIDENCE_LIMIT = 80
 AGENT_TOOL_RESULT_LIMIT = 128 * 1024
 
 
@@ -536,6 +541,62 @@ def agent_emergency_round_limit() -> int:
     except ValueError:
         value = AGENT_EMERGENCY_MAX_ROUNDS_DEFAULT
     return max(AGENT_EMERGENCY_MAX_ROUNDS_MIN, min(AGENT_EMERGENCY_MAX_ROUNDS_MAX, value))
+
+
+def agent_context_compact_limit() -> int:
+    raw = os.environ.get("CLOSEDCODE_AGENT_CONTEXT_COMPACT_AFTER_CHARS", "").strip()
+    try:
+        value = int(raw) if raw else AGENT_CONTEXT_COMPACT_AFTER_CHARS_DEFAULT
+    except ValueError:
+        value = AGENT_CONTEXT_COMPACT_AFTER_CHARS_DEFAULT
+    return max(AGENT_CONTEXT_COMPACT_AFTER_CHARS_MIN, min(AGENT_CONTEXT_COMPACT_AFTER_CHARS_MAX, value))
+
+
+def agent_context_chars(conversation) -> int:
+    return len(json.dumps(conversation, ensure_ascii=False, separators=(",", ":")))
+
+
+def agent_compact_conversation(conversation):
+    before = agent_context_chars(conversation)
+    if before <= agent_context_compact_limit() or len(conversation) <= AGENT_CONTEXT_KEEP_RECENT_MESSAGES + 2:
+        return conversation, None
+    start = max(1, len(conversation) - AGENT_CONTEXT_KEEP_RECENT_MESSAGES)
+    while start > 1 and conversation[start].get("role") == "tool":
+        start -= 1
+    if start <= 1:
+        return conversation, None
+    removed = conversation[1:start]
+    users, evidence = [], []
+    for item in removed:
+        role = item.get("role")
+        content = item.get("content")
+        if role == "user" and isinstance(content, str):
+            users.append(content)
+        elif role == "assistant":
+            calls = item.get("tool_calls")
+            if isinstance(calls, list):
+                for call in calls:
+                    fn = call.get("function") if isinstance(call, dict) else None
+                    name = fn.get("name") if isinstance(fn, dict) else None
+                    args = fn.get("arguments") if isinstance(fn, dict) else None
+                    if isinstance(name, str) and name:
+                        evidence.append("assistant requested " + name + " args=" + str(args)[:400])
+            if isinstance(content, str) and content.strip():
+                evidence.append("assistant note: " + content.strip()[:500])
+        elif role == "tool" and isinstance(content, str):
+            evidence.append(str(item.get("name", "tool")) + ": " + content[:700])
+    evidence = evidence[-AGENT_CONTEXT_EVIDENCE_LIMIT:]
+    parts = [
+        "ClosedCode mission context checkpoint. Continue the same mission; older tool chatter was compacted, not completed.",
+        "Do not broaden scope. Re-inspect live state before relying on summarized execution evidence.",
+    ]
+    if users:
+        parts.append("Earlier user and steering instructions preserved verbatim:\n" + "\n---\n".join(users))
+    if evidence:
+        parts.append("Earlier execution evidence summary:\n- " + "\n- ".join(evidence))
+    checkpoint = {"role":"system","content":"\n\n".join(parts)}
+    compacted = [conversation[0], checkpoint] + conversation[start:]
+    return compacted, {"beforeChars":before,"afterChars":agent_context_chars(compacted),"removedMessages":len(removed),"preservedUserInstructions":len(users)}
 
 AGENT_TOOLS = [
     {
@@ -1266,6 +1327,13 @@ class Handler(BaseHTTPRequestHandler):
                             if pacing_delay > 0 and not wait_with_cancel(request_id, pacing_delay):
                                 cancelled = True
                                 break
+
+                        compacted, compaction = agent_compact_conversation(conversation)
+                        if compaction is not None:
+                            conversation = compacted
+                            event = {"closedcode":{"type":"context_compaction","requestID":request_id,"status":"completed","round":round_index + 1,**compaction}}
+                            self.wfile.write(("data: " + json.dumps(event, separators=(",", ":")) + "\n\n").encode("utf-8"))
+                            self.wfile.flush()
 
                         upstream_payload = {
                             "model": model,
