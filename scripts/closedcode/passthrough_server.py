@@ -24,7 +24,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.8.7"
+VERSION = "0.8.8"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -531,6 +531,9 @@ AGENT_CONTEXT_COMPACT_AFTER_CHARS_MIN = 65536
 AGENT_CONTEXT_COMPACT_AFTER_CHARS_MAX = 4000000
 AGENT_CONTEXT_KEEP_RECENT_MESSAGES = 48
 AGENT_CONTEXT_EVIDENCE_LIMIT = 80
+AGENT_STAGNATION_REPEAT_THRESHOLD = 4
+AGENT_STAGNATION_MAX_INTERVENTIONS = 3
+AGENT_STAGNATION_RESET_AFTER_PRODUCTIVE_TOOLS = 12
 AGENT_TOOL_RESULT_LIMIT = 128 * 1024
 
 
@@ -597,6 +600,24 @@ def agent_compact_conversation(conversation):
     checkpoint = {"role":"system","content":"\n\n".join(parts)}
     compacted = [conversation[0], checkpoint] + conversation[start:]
     return compacted, {"beforeChars":before,"afterChars":agent_context_chars(compacted),"removedMessages":len(removed),"preservedUserInstructions":len(users)}
+
+
+def agent_tool_signature(name, arguments, result) -> str:
+    raw = json.dumps({"name":name,"arguments":arguments,"result":result}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def agent_stagnation_reason(signatures):
+    n = AGENT_STAGNATION_REPEAT_THRESHOLD
+    if len(signatures) >= n and len(set(signatures[-n:])) == 1:
+        return "repeated identical tool action and result"
+    for width in (2, 3, 4):
+        span = width * 3
+        if len(signatures) >= span:
+            tail = signatures[-span:]
+            if tail == tail[:width] * 3:
+                return f"repeated {width}-step tool cycle without new evidence"
+    return None
 
 AGENT_TOOLS = [
     {
@@ -1295,6 +1316,9 @@ class Handler(BaseHTTPRequestHandler):
                 final_text = ""
                 cancelled = False
                 last_zai_provider_round_finished_at = None
+                recent_tool_signatures = []
+                stagnation_interventions = 0
+                productive_tools_since_guardrail = 0
 
                 try:
                     for round_index in range(agent_emergency_round_limit()):
@@ -1400,6 +1424,7 @@ class Handler(BaseHTTPRequestHandler):
                                 function = call.get("function") if isinstance(call, dict) else None
                                 name = function.get("name") if isinstance(function, dict) else None
                                 raw_args = function.get("arguments", "{}") if isinstance(function, dict) else "{}"
+                                arguments = {}
                                 if not isinstance(call_id, str) or not call_id:
                                     call_id = "closedcode-call-" + str(round_index)
                                 if not isinstance(name, str) or not name:
@@ -1486,8 +1511,25 @@ class Handler(BaseHTTPRequestHandler):
                                 }
                                 self.wfile.write(("data: " + json.dumps(result_event, separators=(",", ":")) + "\n\n").encode("utf-8"))
                                 self.wfile.flush()
+                                recent_tool_signatures.append(agent_tool_signature(name, arguments, result))
+                                recent_tool_signatures = recent_tool_signatures[-24:]
                             if cancelled:
                                 break
+                            reason = agent_stagnation_reason(recent_tool_signatures)
+                            if reason:
+                                if stagnation_interventions >= AGENT_STAGNATION_MAX_INTERVENTIONS:
+                                    raise RuntimeError("agent blocked after repeated no-progress behavior: " + reason)
+                                stagnation_interventions += 1
+                                productive_tools_since_guardrail = 0
+                                recent_tool_signatures = []
+                                conversation.append({"role":"system","content":"Progress guardrail: " + reason + ". Reassess the original mission now. Use a materially different authorized approach, preserve all user constraints, and do not repeat the same tool pattern unless new evidence justifies it."})
+                                event = {"closedcode":{"type":"progress_guardrail","requestID":request_id,"status":"reassess","reason":reason,"intervention":stagnation_interventions,"round":round_index + 1}}
+                                self.wfile.write(("data: " + json.dumps(event, separators=(",", ":")) + "\n\n").encode("utf-8"))
+                                self.wfile.flush()
+                            else:
+                                productive_tools_since_guardrail += len(tool_calls)
+                                if productive_tools_since_guardrail >= AGENT_STAGNATION_RESET_AFTER_PRODUCTIVE_TOOLS:
+                                    stagnation_interventions = 0
                             continue
 
                         content = message.get("content")
