@@ -376,6 +376,17 @@ public final class ClosedCodeApi {
         }
     }
 
+    public void steerAgentRequest(String requestId, String text, Callback cb) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("requestID", requestId);
+            body.put("text", text);
+            asyncAbsolute("POST", "http://127.0.0.1:4097/agent/steer", body.toString(), cb);
+        } catch (Exception e) {
+            main.post(() -> cb.failure(e.toString()));
+        }
+    }
+
     public void replyAgentPermission(String requestId, String permissionId, boolean allow, Callback cb) {
         try {
             JSONObject body = new JSONObject();

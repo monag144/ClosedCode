@@ -22,11 +22,12 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.8.2"
+VERSION = "0.8.3"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
 MAX_HISTORY_MESSAGES = 500
+MAX_STEERING_CHARS = 12000
 PROVIDERS = {
     "nvidia": {
         "env": "CLOSEDCODE_NVIDIA_BASE_URL",
@@ -56,7 +57,7 @@ def active_stream_register(request_id: str, upstream):
     with ACTIVE_STREAMS_LOCK:
         if request_id in ACTIVE_STREAMS:
             raise ValueError("requestID already active")
-        ACTIVE_STREAMS[request_id] = {"upstream": upstream, "cancelled": False}
+        ACTIVE_STREAMS[request_id] = {"upstream": upstream, "cancelled": False, "steering": []}
 
 
 def active_stream_cancel(request_id: str) -> bool:
@@ -99,6 +100,33 @@ def active_stream_set_upstream(request_id: str, upstream):
         entry = ACTIVE_STREAMS.get(request_id)
         if entry is not None:
             entry["upstream"] = upstream
+
+
+def active_stream_steer(request_id: str, text: str) -> bool:
+    validate_request_id(request_id)
+    if not isinstance(text, str):
+        raise ValueError("steering text must be text")
+    text = text.strip()
+    if not text:
+        raise ValueError("steering text is required")
+    if len(text) > MAX_STEERING_CHARS:
+        raise ValueError("steering text exceeds length limit")
+    with ACTIVE_STREAMS_LOCK:
+        entry = ACTIVE_STREAMS.get(request_id)
+        if not entry or entry.get("cancelled"):
+            return False
+        entry.setdefault("steering", []).append(text)
+    return True
+
+
+def active_stream_take_steering(request_id: str) -> list[str]:
+    with ACTIVE_STREAMS_LOCK:
+        entry = ACTIVE_STREAMS.get(request_id)
+        if not entry:
+            return []
+        steering = list(entry.get("steering") or [])
+        entry["steering"] = []
+    return steering
 
 
 def agent_permission_id(request_id: str, call_id: str, round_index: int) -> str:
@@ -1089,7 +1117,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path not in {"/v1/chat/completions", "/history", "/fs/write", "/fs/mkdir", "/exec", "/cancel", "/agent", "/agent/permission"}:
+        if parsed.path not in {"/v1/chat/completions", "/history", "/fs/write", "/fs/mkdir", "/exec", "/cancel", "/agent", "/agent/permission", "/agent/steer"}:
             self.send_json(404, {"error": "not_found"})
             return
 
@@ -1105,6 +1133,23 @@ class Handler(BaseHTTPRequestHandler):
                 request_id = validate_request_id(payload.get("requestID"))
                 cancelled = active_stream_cancel(request_id)
                 self.send_json(200, {"requestID": request_id, "cancelled": cancelled})
+                return
+
+            if parsed.path == "/agent/steer":
+                request_id = validate_request_id(payload.get("requestID"))
+                text = payload.get("text")
+                queued = active_stream_steer(request_id, text)
+                if not queued:
+                    self.send_json(
+                        409,
+                        {
+                            "requestID": request_id,
+                            "queued": False,
+                            "error": "request_not_active",
+                        },
+                    )
+                    return
+                self.send_json(200, {"requestID": request_id, "queued": True})
                 return
 
             if parsed.path == "/agent/permission":
@@ -1185,6 +1230,25 @@ class Handler(BaseHTTPRequestHandler):
                             cancelled = True
                             break
 
+                        queued_steering = active_stream_take_steering(request_id)
+                        if queued_steering:
+                            for steering_text in queued_steering:
+                                steering_message = {"role": "user", "content": steering_text}
+                                conversation.append(steering_message)
+                                current_history_messages.append(steering_message)
+                            steering_event = {
+                                "closedcode": {
+                                    "type": "steering",
+                                    "requestID": request_id,
+                                    "status": "applied",
+                                    "count": len(queued_steering),
+                                }
+                            }
+                            self.wfile.write(
+                                ("data: " + json.dumps(steering_event, separators=(",", ":")) + "\n\n").encode("utf-8")
+                            )
+                            self.wfile.flush()
+
                         upstream_payload = {
                             "model": model,
                             "messages": conversation,
@@ -1216,6 +1280,28 @@ class Handler(BaseHTTPRequestHandler):
                             raise RuntimeError("provider response missing message")
 
                         tool_calls = message.get("tool_calls")
+                        if not (isinstance(tool_calls, list) and tool_calls):
+                            queued_steering = active_stream_take_steering(request_id)
+                            if queued_steering:
+                                conversation.append(message)
+                                for steering_text in queued_steering:
+                                    steering_message = {"role": "user", "content": steering_text}
+                                    conversation.append(steering_message)
+                                    current_history_messages.append(steering_message)
+                                steering_event = {
+                                    "closedcode": {
+                                        "type": "steering",
+                                        "requestID": request_id,
+                                        "status": "applied",
+                                        "count": len(queued_steering),
+                                    }
+                                }
+                                self.wfile.write(
+                                    ("data: " + json.dumps(steering_event, separators=(",", ":")) + "\n\n").encode("utf-8")
+                                )
+                                self.wfile.flush()
+                                continue
+
                         if isinstance(tool_calls, list) and tool_calls:
                             conversation.append(message)
                             for call in tool_calls:

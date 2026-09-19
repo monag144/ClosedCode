@@ -61,6 +61,7 @@ public final class MainActivity extends Activity {
     private TextView voiceButton;
     private TextView toolStatus;
     private TextView sendButton;
+    private TextView stopButton;
     private ContextUsageView usageButton;
     private EditText composer;
     private EditText serverUrlInput;
@@ -182,6 +183,7 @@ public final class MainActivity extends Activity {
         voiceButton = findViewById(R.id.voiceButton);
         toolStatus = findViewById(R.id.toolStatus);
         sendButton = findViewById(R.id.sendButton);
+        stopButton = findViewById(R.id.stopButton);
         usageButton = findViewById(R.id.usageButton);
         composer = findViewById(R.id.composer);
         serverUrlInput = findViewById(R.id.serverUrlInput);
@@ -202,10 +204,8 @@ public final class MainActivity extends Activity {
         findViewById(R.id.refreshSessions).setOnClickListener(v -> refreshEverything());
         findViewById(R.id.newSessionButton).setOnClickListener(v -> createSession());
         findViewById(R.id.backButton).setOnClickListener(v -> closeChat());
-        sendButton.setOnClickListener(v -> {
-            if (promptRunning) abortPrompt();
-            else sendPrompt();
-        });
+        sendButton.setOnClickListener(v -> sendPrompt());
+        stopButton.setOnClickListener(v -> abortPrompt());
         findViewById(R.id.filesButton).setOnClickListener(v -> showFiles("."));
         findViewById(R.id.diffButton).setOnClickListener(v -> showDiff());
         findViewById(R.id.runButton).setOnClickListener(v -> showRunCommand());
@@ -926,9 +926,13 @@ public final class MainActivity extends Activity {
     }
 
     private void sendPrompt() {
-        if (currentSessionId == null || promptRunning) return;
+        if (currentSessionId == null) return;
         String text = composer.getText().toString().trim();
         if (text.isEmpty()) return;
+        if (promptRunning) {
+            steerPrompt(text);
+            return;
+        }
 
         composer.setText("");
         addMessageBubble("user", text);
@@ -1127,6 +1131,32 @@ public final class MainActivity extends Activity {
         return body;
     }
 
+    private void steerPrompt(String text) {
+        final String expectedId = currentSessionId;
+        final String requestId = activeProviderRequestId;
+        if (expectedId == null || requestId == null) {
+            toolStatus.setText("Steering unavailable");
+            toast("Steering is available for active provider-agent tasks");
+            return;
+        }
+        composer.setText("");
+        addMessageBubble("user", text);
+        toolStatus.setText("Steering…");
+        api.steerAgentRequest(requestId, text, new ClosedCodeApi.Callback() {
+            @Override public void success(String body) {
+                if (!expectedId.equals(currentSessionId) || !requestId.equals(activeProviderRequestId)) return;
+                toolStatus.setText("Steering queued…");
+            }
+
+            @Override public void failure(String message) {
+                if (!expectedId.equals(currentSessionId)) return;
+                if (composer.getText().toString().trim().isEmpty()) composer.setText(text);
+                toolStatus.setText("Steering failed");
+                addMessageBubble("system", "Steering failed: " + message);
+            }
+        });
+    }
+
     private void abortPrompt() {
         if (currentSessionId == null) return;
         final String expectedId = currentSessionId;
@@ -1163,9 +1193,15 @@ public final class MainActivity extends Activity {
 
     private void setPromptRunning(boolean running) {
         promptRunning = running;
-        if (sendButton == null) return;
-        sendButton.setText(running ? "■" : "↑");
-        sendButton.setContentDescription(running ? "Stop generation" : "Send prompt");
+        if (sendButton != null) {
+            sendButton.setText("↑");
+            sendButton.setContentDescription(running ? "Steer active task" : "Send prompt");
+        }
+        if (stopButton != null) {
+            stopButton.setVisibility(running ? View.VISIBLE : View.GONE);
+            stopButton.setEnabled(running);
+            stopButton.setContentDescription("Stop generation");
+        }
     }
 
     private void schedulePromptRefresh(String expectedId, long delayMs) {
