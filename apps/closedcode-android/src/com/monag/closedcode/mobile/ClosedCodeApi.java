@@ -258,6 +258,7 @@ public final class ClosedCodeApi {
             String text,
             String providerId,
             String modelId,
+            String autonomy,
             String requestId,
             AgentStreamListener listener) {
         pool.execute(() -> {
@@ -267,6 +268,7 @@ public final class ClosedCodeApi {
                 JSONObject body = new JSONObject();
                 body.put("providerID", providerId);
                 body.put("model", modelId);
+                body.put("autonomy", autonomy == null ? "ask" : autonomy);
                 body.put("sessionID", sessionId);
                 body.put("requestID", requestId);
                 body.put("root", root);
@@ -430,6 +432,14 @@ public final class ClosedCodeApi {
         asyncAbsolute(
                 "GET",
                 "http://127.0.0.1:4097/fs/list?root=" + enc(root) + "&path=" + enc(path),
+                null,
+                cb);
+    }
+
+    public void workspaceDiff(String root, Callback cb) {
+        asyncAbsolute(
+                "GET",
+                "http://127.0.0.1:4097/fs/diff?root=" + enc(root),
                 null,
                 cb);
     }

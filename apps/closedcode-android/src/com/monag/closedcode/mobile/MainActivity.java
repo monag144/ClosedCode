@@ -67,6 +67,7 @@ public final class MainActivity extends Activity {
     private EditText directoryInput;
     private Switch biometricSwitch;
     private Switch hidePreviewSwitch;
+    private Switch yoloSwitch;
     private Switch permissionNotifySwitch;
     private Switch questionNotifySwitch;
     private Switch completedNotifySwitch;
@@ -187,6 +188,7 @@ public final class MainActivity extends Activity {
         directoryInput = findViewById(R.id.directoryInput);
         biometricSwitch = findViewById(R.id.biometricSwitch);
         hidePreviewSwitch = findViewById(R.id.hidePreviewSwitch);
+        yoloSwitch = findViewById(R.id.yoloSwitch);
         permissionNotifySwitch = findViewById(R.id.permissionNotifySwitch);
         questionNotifySwitch = findViewById(R.id.questionNotifySwitch);
         completedNotifySwitch = findViewById(R.id.completedNotifySwitch);
@@ -216,6 +218,7 @@ public final class MainActivity extends Activity {
         voiceButton.setOnClickListener(v -> startVoiceInput());
         bindToggle(R.id.biometricRow, biometricSwitch, "requireBiometrics", false, false);
         bindToggle(R.id.hidePreviewRow, hidePreviewSwitch, "hideAppPreview", false, true);
+        bindToggle(R.id.yoloRow, yoloSwitch, "yoloAutonomy", false, false);
         bindToggle(R.id.permissionNotifyRow, permissionNotifySwitch, "notifyPermissions", true, false);
         bindToggle(R.id.questionNotifyRow, questionNotifySwitch, "notifyQuestions", true, false);
         bindToggle(R.id.completedNotifyRow, completedNotifySwitch, "notifyCompleted", true, false);
@@ -1016,6 +1019,7 @@ public final class MainActivity extends Activity {
                 text,
                 providerId,
                 modelId,
+                prefs.getBoolean("yoloAutonomy", false) ? "yolo" : "ask",
                 requestId,
                 new ClosedCodeApi.AgentStreamListener() {
                     @Override public void delta(String piece) {
@@ -1580,20 +1584,44 @@ public final class MainActivity extends Activity {
 
     private void showDiff() {
         if (currentSessionId == null) return;
-        api.diff(currentSessionId, directory, new ClosedCodeApi.Callback() {
+        final boolean nativeProvider = isPassthroughProvider(composerUi.providerId());
+        ClosedCodeApi.Callback callback = new ClosedCodeApi.Callback() {
             @Override public void success(String body) {
                 String pretty = body;
-                try { pretty = new JSONArray(body).toString(2); } catch (Exception ignored) {}
+                if (nativeProvider) {
+                    try {
+                        JSONObject result = new JSONObject(body);
+                        String status = result.optString("status", "");
+                        String diff = result.optString("diff", "");
+                        StringBuilder out = new StringBuilder();
+                        if (!status.isEmpty()) out.append("status\n").append(status);
+                        if (!diff.isEmpty()) {
+                            if (out.length() > 0) out.append("\n");
+                            out.append("diff\n").append(diff);
+                        }
+                        if (result.optBoolean("statusTruncated", false)) out.append("\n[status truncated]");
+                        if (result.optBoolean("diffTruncated", false)) out.append("\n[diff truncated]");
+                        pretty = out.length() == 0 ? "No workspace changes." : out.toString();
+                    } catch (Exception ignored) {}
+                } else {
+                    try { pretty = new JSONArray(body).toString(2); } catch (Exception ignored) {}
+                }
                 TextView text = simpleText(pretty, 12, R.color.cc_text);
                 text.setTextIsSelectable(true);
                 text.setPadding(dp(16), dp(10), dp(16), dp(10));
                 ScrollView scroll = new ScrollView(MainActivity.this);
                 scroll.setBackgroundColor(getColor(R.color.cc_bg));
                 scroll.addView(text);
-                new AlertDialog.Builder(MainActivity.this).setTitle("Session diff").setView(scroll).setPositiveButton("Done", null).show();
+                new AlertDialog.Builder(MainActivity.this)
+                        .setTitle(nativeProvider ? "Workspace changes" : "Session diff")
+                        .setView(scroll)
+                        .setPositiveButton("Done", null)
+                        .show();
             }
             @Override public void failure(String message) { toast("Diff: " + message); }
-        });
+        };
+        if (nativeProvider) api.workspaceDiff(directory, callback);
+        else api.diff(currentSessionId, directory, callback);
     }
 
     private void saveBackend() {

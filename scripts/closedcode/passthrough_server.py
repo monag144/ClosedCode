@@ -22,7 +22,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.8.0"
+VERSION = "0.8.1"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -803,10 +803,24 @@ class Handler(BaseHTTPRequestHandler):
                     {"error": "history_failure", "message": exc.__class__.__name__},
                 )
             return
-        if parsed.path in {"/fs/list", "/fs/read", "/fs/search"}:
+        if parsed.path in {"/fs/list", "/fs/read", "/fs/search", "/fs/diff"}:
             try:
                 query = parse_qs(parsed.query)
                 root_value = (query.get("root") or [""])[0]
+                if parsed.path == "/fs/diff":
+                    status_result = agent_tool_result(root_value, "git_status", {})
+                    diff_result = agent_tool_result(root_value, "git_diff", {})
+                    self.send_json(
+                        200,
+                        {
+                            "root": str(workspace_root(root_value)),
+                            "status": status_result.get("output", ""),
+                            "diff": diff_result.get("output", ""),
+                            "statusTruncated": bool(status_result.get("truncated", False)),
+                            "diffTruncated": bool(diff_result.get("truncated", False)),
+                        },
+                    )
+                    return
                 if parsed.path == "/fs/list":
                     path_value = (query.get("path") or ["."])[0]
                     root, target = workspace_path(root_value, path_value)
