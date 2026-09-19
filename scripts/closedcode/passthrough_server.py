@@ -24,7 +24,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.8.8"
+VERSION = "0.8.9"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -1315,6 +1315,8 @@ class Handler(BaseHTTPRequestHandler):
                 upstream_url = provider_base(provider_id) + "/chat/completions"
                 final_text = ""
                 cancelled = False
+                termination_reason = "completed"
+                completed_rounds = 0
                 last_zai_provider_round_finished_at = None
                 recent_tool_signatures = []
                 stagnation_interventions = 0
@@ -1322,6 +1324,7 @@ class Handler(BaseHTTPRequestHandler):
 
                 try:
                     for round_index in range(agent_emergency_round_limit()):
+                        completed_rounds = round_index + 1
                         if active_stream_cancelled(request_id):
                             cancelled = True
                             break
@@ -1518,6 +1521,7 @@ class Handler(BaseHTTPRequestHandler):
                             reason = agent_stagnation_reason(recent_tool_signatures)
                             if reason:
                                 if stagnation_interventions >= AGENT_STAGNATION_MAX_INTERVENTIONS:
+                                    termination_reason = "blocked_stagnation"
                                     raise RuntimeError("agent blocked after repeated no-progress behavior: " + reason)
                                 stagnation_interventions += 1
                                 productive_tools_since_guardrail = 0
@@ -1544,12 +1548,16 @@ class Handler(BaseHTTPRequestHandler):
                             self.wfile.flush()
                         break
                     else:
+                        termination_reason = "resource_limit"
                         raise RuntimeError("agent reached configurable emergency round failsafe")
                 except Exception as exc:
+                    if termination_reason == "completed":
+                        termination_reason = "error"
                     error_event = {
                         "closedcode": {
                             "type": "error",
                             "requestID": request_id,
+                            "termination": termination_reason,
                             "message": str(exc)[:1500],
                         }
                     }
@@ -1560,6 +1568,8 @@ class Handler(BaseHTTPRequestHandler):
                         pass
                 finally:
                     cancelled = cancelled or active_stream_cancelled(request_id)
+                    if cancelled:
+                        termination_reason = "cancelled"
                     active_stream_unregister(request_id)
                     try:
                         additions = list(current_history_messages)
@@ -1576,6 +1586,8 @@ class Handler(BaseHTTPRequestHandler):
                                 "requestID": request_id,
                                 "cancelled": cancelled,
                                 "complete": True,
+                                "termination": termination_reason,
+                                "rounds": completed_rounds,
                             }
                         }
                         self.wfile.write(("data: " + json.dumps(marker, separators=(",", ":")) + "\n\n").encode("utf-8"))
