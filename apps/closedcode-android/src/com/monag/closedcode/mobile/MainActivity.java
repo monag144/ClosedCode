@@ -99,6 +99,8 @@ public final class MainActivity extends Activity {
     private AlertDialog activeAgentPermissionDialog;
     private TextView providerStreamBody;
     private final StringBuilder providerStreamText = new StringBuilder();
+    private final List<View> selectedTranscriptBlocks = new ArrayList<>();
+    private boolean transcriptSelectionMode;
     private static final int VOICE_REQUEST_CODE = 413;
     private final List<ProviderChoice> providerChoices = new ArrayList<>();
 
@@ -723,6 +725,7 @@ public final class MainActivity extends Activity {
 
     private void closeChat() {
         if (pageTransitionRunning) return;
+        clearTranscriptSelection(false);
         streamGeneration++;
         eventReconnectAttempt = 0;
         cancelActiveProviderForLifecycle();
@@ -834,6 +837,7 @@ public final class MainActivity extends Activity {
     }
 
     private void renderMessages(String body) {
+        clearTranscriptSelection(false);
         messageList.removeAllViews();
         try {
             JSONArray arr = new JSONArray(body);
@@ -892,6 +896,7 @@ public final class MainActivity extends Activity {
         box.addView(tag);
         box.addView(body);
         messageList.addView(box, matchWrapMargins("user".equals(role) ? 42 : 0, 5, "user".equals(role) ? 0 : 20, 5));
+        registerTranscriptBlock(box);
     }
 
     private void addAgentToolBubble(String tool, String status, String detail) {
@@ -903,6 +908,7 @@ public final class MainActivity extends Activity {
         v.setBackgroundResource(R.drawable.bg_card);
         v.setPadding(dp(12), dp(10), dp(12), dp(10));
         messageList.addView(v, matchWrapMargins(0, 4, 36, 4));
+        registerTranscriptBlock(v);
         toolStatus.setText((tool == null || tool.isEmpty() ? "tool" : tool)
                 + " · " + (status == null || status.isEmpty() ? "running" : status));
         messageScroll.post(() -> messageScroll.fullScroll(View.FOCUS_DOWN));
@@ -918,6 +924,7 @@ public final class MainActivity extends Activity {
         v.setBackgroundResource(R.drawable.bg_card);
         v.setPadding(dp(12), dp(10), dp(12), dp(10));
         messageList.addView(v, matchWrapMargins(0, 4, 36, 4));
+        registerTranscriptBlock(v);
         toolStatus.setText(tool + " · " + status);
     }
 
@@ -926,14 +933,88 @@ public final class MainActivity extends Activity {
         TextView v = simpleText(text, 11, R.color.cc_muted);
         v.setPadding(dp(8), dp(4), dp(8), dp(4));
         messageList.addView(v);
+        registerTranscriptBlock(v);
+    }
+
+    private void registerTranscriptBlock(View block) {
+        block.setClickable(true);
+        block.setLongClickable(true);
+        block.setOnLongClickListener(v -> {
+            if (!transcriptSelectionMode) {
+                transcriptSelectionMode = true;
+                selectedTranscriptBlocks.clear();
+            }
+            toggleTranscriptSelection(block);
+            return true;
+        });
+        block.setOnClickListener(v -> {
+            if (transcriptSelectionMode) toggleTranscriptSelection(block);
+        });
+        if (block instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) block;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                View child = group.getChildAt(i);
+                child.setOnLongClickListener(v -> {
+                    if (!transcriptSelectionMode) {
+                        transcriptSelectionMode = true;
+                        selectedTranscriptBlocks.clear();
+                    }
+                    toggleTranscriptSelection(block);
+                    return true;
+                });
+                child.setOnClickListener(v -> {
+                    if (transcriptSelectionMode) toggleTranscriptSelection(block);
+                });
+            }
+        }
+    }
+
+    private void toggleTranscriptSelection(View block) {
+        if (selectedTranscriptBlocks.contains(block)) {
+            selectedTranscriptBlocks.remove(block);
+            setTranscriptBlockSelected(block, false);
+        } else {
+            selectedTranscriptBlocks.add(block);
+            setTranscriptBlockSelected(block, true);
+        }
+        transcriptSelectionMode = !selectedTranscriptBlocks.isEmpty();
+        updateTranscriptSelectionUi();
+    }
+
+    private void setTranscriptBlockSelected(View block, boolean selected) {
+        block.setAlpha(selected ? 0.55f : 1f);
+        block.setScaleX(selected ? 0.985f : 1f);
+        block.setScaleY(selected ? 0.985f : 1f);
+    }
+
+    private void clearTranscriptSelection(boolean announce) {
+        for (View block : new ArrayList<>(selectedTranscriptBlocks)) {
+            setTranscriptBlockSelected(block, false);
+        }
+        selectedTranscriptBlocks.clear();
+        transcriptSelectionMode = false;
+        updateTranscriptSelectionUi();
+        if (announce) toolStatus.setText("Selection cleared");
+    }
+
+    private void updateTranscriptSelectionUi() {
+        if (copySessionButton == null) return;
+        int count = selectedTranscriptBlocks.size();
+        copySessionButton.setText(count > 0 ? "Copy " + count : "Copy");
+        copySessionButton.setContentDescription(
+                count > 0 ? "Copy " + count + " selected transcript cards" : "Copy session transcript");
+        if (count > 0 && toolStatus != null) toolStatus.setText(count + " selected");
     }
 
     private void copySessionTranscript() {
         if (currentSessionId == null || messageList == null) return;
+        final boolean selectedOnly = transcriptSelectionMode && !selectedTranscriptBlocks.isEmpty();
         StringBuilder transcript = new StringBuilder();
         for (int i = 0; i < messageList.getChildCount(); i++) {
+            View transcriptBlock = messageList.getChildAt(i);
+            if (selectedOnly && !selectedTranscriptBlocks.contains(transcriptBlock)) continue;
             StringBuilder block = new StringBuilder();
-            collectTranscriptText(messageList.getChildAt(i), block);
+            collectTranscriptText(transcriptBlock, block);
             String value = block.toString().trim();
             if (value.isEmpty()) continue;
             if (transcript.length() > 0) transcript.append("\n\n");
@@ -950,9 +1031,12 @@ public final class MainActivity extends Activity {
             toast("Clipboard unavailable");
             return;
         }
-        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("ClosedCode session", text));
-        toolStatus.setText("Session copied");
-        toast("Session copied");
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText(
+                selectedOnly ? "ClosedCode selection" : "ClosedCode session", text));
+        int copiedCount = selectedTranscriptBlocks.size();
+        if (selectedOnly) clearTranscriptSelection(false);
+        toolStatus.setText(selectedOnly ? "Selection copied" : "Session copied");
+        toast(selectedOnly ? copiedCount + " cards copied" : "Session copied");
     }
 
     private void collectTranscriptText(View view, StringBuilder out) {
@@ -1177,6 +1261,7 @@ public final class MainActivity extends Activity {
         box.addView(tag);
         box.addView(body);
         messageList.addView(box, matchWrapMargins(0, 5, 20, 5));
+        registerTranscriptBlock(box);
         messageScroll.post(() -> messageScroll.fullScroll(View.FOCUS_DOWN));
         return body;
     }
