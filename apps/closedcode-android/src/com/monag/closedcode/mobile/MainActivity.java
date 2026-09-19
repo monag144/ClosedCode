@@ -60,6 +60,7 @@ public final class MainActivity extends Activity {
     private TextView effortChip;
     private TextView voiceButton;
     private TextView toolStatus;
+    private TextView copySessionButton;
     private TextView sendButton;
     private TextView stopButton;
     private ContextUsageView usageButton;
@@ -182,6 +183,7 @@ public final class MainActivity extends Activity {
         effortChip = findViewById(R.id.effortChip);
         voiceButton = findViewById(R.id.voiceButton);
         toolStatus = findViewById(R.id.toolStatus);
+        copySessionButton = findViewById(R.id.copySessionButton);
         sendButton = findViewById(R.id.sendButton);
         stopButton = findViewById(R.id.stopButton);
         usageButton = findViewById(R.id.usageButton);
@@ -204,6 +206,7 @@ public final class MainActivity extends Activity {
         findViewById(R.id.refreshSessions).setOnClickListener(v -> refreshEverything());
         findViewById(R.id.newSessionButton).setOnClickListener(v -> createSession());
         findViewById(R.id.backButton).setOnClickListener(v -> closeChat());
+        copySessionButton.setOnClickListener(v -> copySessionTranscript());
         sendButton.setOnClickListener(v -> sendPrompt());
         stopButton.setOnClickListener(v -> abortPrompt());
         findViewById(R.id.filesButton).setOnClickListener(v -> showFiles("."));
@@ -923,6 +926,53 @@ public final class MainActivity extends Activity {
         TextView v = simpleText(text, 11, R.color.cc_muted);
         v.setPadding(dp(8), dp(4), dp(8), dp(4));
         messageList.addView(v);
+    }
+
+    private void copySessionTranscript() {
+        if (currentSessionId == null || messageList == null) return;
+        StringBuilder transcript = new StringBuilder();
+        for (int i = 0; i < messageList.getChildCount(); i++) {
+            StringBuilder block = new StringBuilder();
+            collectTranscriptText(messageList.getChildAt(i), block);
+            String value = block.toString().trim();
+            if (value.isEmpty()) continue;
+            if (transcript.length() > 0) transcript.append("\n\n");
+            transcript.append(value);
+        }
+        String text = transcript.toString().trim();
+        if (text.isEmpty()) {
+            toast("Nothing to copy");
+            return;
+        }
+        android.content.ClipboardManager clipboard =
+                (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (clipboard == null) {
+            toast("Clipboard unavailable");
+            return;
+        }
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("ClosedCode session", text));
+        toolStatus.setText("Session copied");
+        toast("Session copied");
+    }
+
+    private void collectTranscriptText(View view, StringBuilder out) {
+        if (view instanceof TextView) {
+            CharSequence value = ((TextView) view).getText();
+            if (value != null) {
+                String text = value.toString().trim();
+                if (!text.isEmpty()) {
+                    if (out.length() > 0) out.append("\n");
+                    out.append(text);
+                }
+            }
+            return;
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                collectTranscriptText(group.getChildAt(i), out);
+            }
+        }
     }
 
     private void sendPrompt() {
