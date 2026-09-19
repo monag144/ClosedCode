@@ -8,6 +8,8 @@ returned by this service.
 from __future__ import annotations
 
 import argparse
+from datetime import timezone
+from email.utils import parsedate_to_datetime
 import hashlib
 import json
 import os
@@ -22,7 +24,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.8.3"
+VERSION = "0.8.4"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -181,7 +183,44 @@ def agent_permission_unregister(permission_id: str):
 
 
 RETRYABLE_PROVIDER_STATUS = {429, 500, 502, 503, 504}
-PROVIDER_MAX_ATTEMPTS = 3
+PROVIDER_MAX_ATTEMPTS = 4
+PROVIDER_RETRY_AFTER_CAP_SECONDS = 30.0
+PROVIDER_RATE_LIMIT_BASE_DELAY_SECONDS = 4.0
+PROVIDER_TRANSIENT_BASE_DELAY_SECONDS = 0.75
+PROVIDER_TRANSIENT_DELAY_CAP_SECONDS = 6.0
+
+
+def provider_retry_after_seconds(headers) -> float | None:
+    if headers is None:
+        return None
+    try:
+        value = headers.get("Retry-After")
+    except Exception:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        return None
+    raw = value.strip()
+    try:
+        seconds = float(raw)
+    except ValueError:
+        try:
+            when = parsedate_to_datetime(raw)
+            if when.tzinfo is None:
+                when = when.replace(tzinfo=timezone.utc)
+            seconds = when.timestamp() - time.time()
+        except Exception:
+            return None
+    return max(0.0, min(PROVIDER_RETRY_AFTER_CAP_SECONDS, seconds))
+
+
+def provider_retry_delay(status: int | None, attempt: int, headers=None) -> float:
+    attempt = max(1, attempt)
+    if status == 429:
+        retry_after = provider_retry_after_seconds(headers)
+        if retry_after is not None:
+            return retry_after
+        return min(PROVIDER_RETRY_AFTER_CAP_SECONDS, PROVIDER_RATE_LIMIT_BASE_DELAY_SECONDS * (2 ** (attempt - 1)))
+    return min(PROVIDER_TRANSIENT_DELAY_CAP_SECONDS, PROVIDER_TRANSIENT_BASE_DELAY_SECONDS * (2 ** (attempt - 1)))
 
 
 def wait_with_cancel(request_id: str, seconds: float) -> bool:
@@ -199,32 +238,29 @@ def agent_provider_completion(provider_id: str, upstream_url: str, key: str, pay
     for attempt in range(1, PROVIDER_MAX_ATTEMPTS + 1):
         if active_stream_cancelled(request_id):
             raise RuntimeError("provider request cancelled")
-        req = urlrequest.Request(
-            upstream_url,
-            data=encoded,
-            method="POST",
-            headers={
-                "Authorization": "Bearer " + key,
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-                "User-Agent": "ClosedCode-Agent/" + VERSION,
-            },
-        )
+        retry_status = None
+        retry_headers = None
+        retryable = False
+        req = urlrequest.Request(upstream_url, data=encoded, method="POST", headers={"Authorization": "Bearer " + key, "Content-Type": "application/json", "Accept": "application/json", "User-Agent": "ClosedCode-Agent/" + VERSION})
         try:
             upstream = urlrequest.urlopen(req, timeout=180)
             active_stream_set_upstream(request_id, upstream)
             with upstream:
                 body = upstream.read()
                 status = getattr(upstream, "status", 200)
+                retry_headers = getattr(upstream, "headers", None)
             active_stream_set_upstream(request_id, None)
             if status < 200 or status >= 300:
                 last_error = "provider HTTP " + str(status)
                 retryable = status in RETRYABLE_PROVIDER_STATUS
+                retry_status = status
             else:
                 return json.loads(body.decode("utf-8", errors="replace"))
         except urlerror.HTTPError as exc:
             active_stream_set_upstream(request_id, None)
             status = exc.code
+            retry_status = status
+            retry_headers = getattr(exc, "headers", None)
             try:
                 exc.read(131072)
             except Exception:
@@ -237,44 +273,24 @@ def agent_provider_completion(provider_id: str, upstream_url: str, key: str, pay
             retryable = True
         if not retryable or attempt >= PROVIDER_MAX_ATTEMPTS:
             raise RuntimeError(last_error + " after " + str(attempt) + " attempt(s)")
-        if not wait_with_cancel(request_id, 0.75 * attempt):
+        delay = provider_retry_delay(retry_status, attempt, retry_headers)
+        if not wait_with_cancel(request_id, delay):
             raise RuntimeError("provider request cancelled")
     raise RuntimeError(last_error)
 
 
-
-
 def agent_provider_stream_completion(provider_id: str, upstream_url: str, key: str, payload: dict, request_id: str) -> dict:
-    """Run an OpenAI-compatible streaming completion and rebuild one assistant message.
-
-    Z.AI/GLM's free endpoint has historically accepted streaming requests while
-    intermittently rate-limiting the equivalent non-streaming request.  The
-    agent still needs a complete assistant message so tool calls can be
-    executed round-by-round; this adapter accumulates SSE deltas into that
-    normal message shape.
-    """
     stream_payload = dict(payload)
     stream_payload["stream"] = True
     encoded = json.dumps(stream_payload, separators=(",", ":")).encode("utf-8")
     last_error = "provider streaming request failed"
-
     for attempt in range(1, PROVIDER_MAX_ATTEMPTS + 1):
         if active_stream_cancelled(request_id):
             raise RuntimeError("provider request cancelled")
-
-        req = urlrequest.Request(
-            upstream_url,
-            data=encoded,
-            method="POST",
-            headers={
-                "Authorization": "Bearer " + key,
-                "Content-Type": "application/json",
-                "Accept": "text/event-stream",
-                "User-Agent": "ClosedCode-Agent/" + VERSION,
-            },
-        )
-
+        retry_status = None
+        retry_headers = None
         retryable = False
+        req = urlrequest.Request(upstream_url, data=encoded, method="POST", headers={"Authorization": "Bearer " + key, "Content-Type": "application/json", "Accept": "text/event-stream", "User-Agent": "ClosedCode-Agent/" + VERSION})
         try:
             upstream = urlrequest.urlopen(req, timeout=180)
             active_stream_set_upstream(request_id, upstream)
@@ -283,12 +299,13 @@ def agent_provider_stream_completion(provider_id: str, upstream_url: str, key: s
             reasoning_parts = []
             tool_slots = {}
             finish_reason = None
-
             with upstream:
                 status = getattr(upstream, "status", 200)
+                retry_headers = getattr(upstream, "headers", None)
                 if status < 200 or status >= 300:
                     last_error = "provider HTTP " + str(status)
                     retryable = status in RETRYABLE_PROVIDER_STATUS
+                    retry_status = status
                 else:
                     while True:
                         if active_stream_cancelled(request_id):
@@ -322,7 +339,6 @@ def agent_provider_stream_completion(provider_id: str, upstream_url: str, key: s
                         reasoning = delta.get("reasoning_content")
                         if isinstance(reasoning, str) and reasoning:
                             reasoning_parts.append(reasoning)
-
                         calls = delta.get("tool_calls")
                         if isinstance(calls, list):
                             for fallback_index, call in enumerate(calls):
@@ -331,14 +347,7 @@ def agent_provider_stream_completion(provider_id: str, upstream_url: str, key: s
                                 index = call.get("index")
                                 if not isinstance(index, int):
                                     index = fallback_index
-                                slot = tool_slots.setdefault(
-                                    index,
-                                    {
-                                        "id": "",
-                                        "type": "function",
-                                        "function": {"name": "", "arguments": ""},
-                                    },
-                                )
+                                slot = tool_slots.setdefault(index, {"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
                                 call_id = call.get("id")
                                 if isinstance(call_id, str) and call_id:
                                     slot["id"] = call_id
@@ -353,13 +362,8 @@ def agent_provider_stream_completion(provider_id: str, upstream_url: str, key: s
                                     arguments = function.get("arguments")
                                     if isinstance(arguments, str) and arguments:
                                         slot["function"]["arguments"] += arguments
-
                     active_stream_set_upstream(request_id, None)
-                    message = {"role": role}
-                    if content_parts:
-                        message["content"] = "".join(content_parts)
-                    else:
-                        message["content"] = None
+                    message = {"role": role, "content": "".join(content_parts) if content_parts else None}
                     if reasoning_parts:
                         message["reasoning_content"] = "".join(reasoning_parts)
                     if tool_slots:
@@ -370,19 +374,13 @@ def agent_provider_stream_completion(provider_id: str, upstream_url: str, key: s
                                 slot["id"] = "closedcode-stream-call-" + str(index)
                             tool_calls.append(slot)
                         message["tool_calls"] = tool_calls
-                    return {
-                        "choices": [
-                            {
-                                "index": 0,
-                                "message": message,
-                                "finish_reason": finish_reason,
-                            }
-                        ]
-                    }
+                    return {"choices": [{"index": 0, "message": message, "finish_reason": finish_reason}]}
             active_stream_set_upstream(request_id, None)
         except urlerror.HTTPError as exc:
             active_stream_set_upstream(request_id, None)
             status = exc.code
+            retry_status = status
+            retry_headers = getattr(exc, "headers", None)
             try:
                 exc.read(131072)
             except Exception:
@@ -393,12 +391,11 @@ def agent_provider_stream_completion(provider_id: str, upstream_url: str, key: s
             active_stream_set_upstream(request_id, None)
             last_error = "provider transport error: " + exc.__class__.__name__
             retryable = True
-
         if not retryable or attempt >= PROVIDER_MAX_ATTEMPTS:
             raise RuntimeError(last_error + " after " + str(attempt) + " attempt(s)")
-        if not wait_with_cancel(request_id, 0.75 * attempt):
+        delay = provider_retry_delay(retry_status, attempt, retry_headers)
+        if not wait_with_cancel(request_id, delay):
             raise RuntimeError("provider request cancelled")
-
     raise RuntimeError(last_error)
 
 
