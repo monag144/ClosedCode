@@ -24,7 +24,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.8.4"
+VERSION = "0.8.5"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -186,6 +186,7 @@ RETRYABLE_PROVIDER_STATUS = {429, 500, 502, 503, 504}
 PROVIDER_MAX_ATTEMPTS = 4
 PROVIDER_RETRY_AFTER_CAP_SECONDS = 30.0
 PROVIDER_RATE_LIMIT_BASE_DELAY_SECONDS = 4.0
+ZAI_MIN_AGENT_ROUND_INTERVAL_SECONDS = 20.0
 PROVIDER_TRANSIENT_BASE_DELAY_SECONDS = 0.75
 PROVIDER_TRANSIENT_DELAY_CAP_SECONDS = 6.0
 
@@ -1220,6 +1221,7 @@ class Handler(BaseHTTPRequestHandler):
                 upstream_url = provider_base(provider_id) + "/chat/completions"
                 final_text = ""
                 cancelled = False
+                last_zai_provider_round_finished_at = None
 
                 try:
                     for round_index in range(AGENT_MAX_ROUNDS):
@@ -1246,6 +1248,13 @@ class Handler(BaseHTTPRequestHandler):
                             )
                             self.wfile.flush()
 
+                        if provider_id == "zai" and last_zai_provider_round_finished_at is not None:
+                            elapsed_since_zai_round = time.monotonic() - last_zai_provider_round_finished_at
+                            pacing_delay = max(0.0, ZAI_MIN_AGENT_ROUND_INTERVAL_SECONDS - elapsed_since_zai_round)
+                            if pacing_delay > 0 and not wait_with_cancel(request_id, pacing_delay):
+                                cancelled = True
+                                break
+
                         upstream_payload = {
                             "model": model,
                             "messages": conversation,
@@ -1266,6 +1275,8 @@ class Handler(BaseHTTPRequestHandler):
                             upstream_payload,
                             request_id,
                         )
+                        if provider_id == "zai":
+                            last_zai_provider_round_finished_at = time.monotonic()
 
                         if active_stream_cancelled(request_id):
                             cancelled = True
