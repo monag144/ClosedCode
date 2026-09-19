@@ -5,8 +5,10 @@ import argparse
 import hashlib
 import json
 import time
+import threading
 import urllib.request
 from collections import Counter, defaultdict
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 BASE = "http://127.0.0.1:4097"
@@ -69,6 +71,9 @@ def main() -> int:
     parser.add_argument("--max-permissions", type=int, default=0)
     parser.add_argument("--socket-timeout", type=int, default=1800)
     parser.add_argument("--output")
+    parser.add_argument("--status-port", type=int)
+    parser.add_argument("--status-token")
+    parser.add_argument("--status-ttl", type=int, default=1800)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -78,6 +83,12 @@ def main() -> int:
         parser.error("--cancel-at must be >= 1")
     if args.max_permissions < 0:
         parser.error("--max-permissions must be >= 0")
+    if args.status_port is not None and not (1 <= args.status_port <= 65535):
+        parser.error("--status-port must be between 1 and 65535")
+    if args.status_port is not None and not args.status_token:
+        parser.error("--status-token is required with --status-port")
+    if args.status_ttl < 30:
+        parser.error("--status-ttl must be >= 30")
 
     root = Path(args.root).expanduser().resolve()
     if not root.is_dir():
@@ -140,6 +151,95 @@ def main() -> int:
     terminal = None
     final_parts = []
 
+    status_lock = threading.Lock()
+    status_done = threading.Event()
+    status_server = None
+    status_state = {
+        "runner": "closedcode-marathon",
+        "pid": __import__("os").getpid(),
+        "phase": "starting",
+        "done": False,
+        "accepted": None,
+        "requestID": request_id,
+        "sessionID": session_id,
+        "provider": args.provider,
+        "model": model,
+        "autonomy": args.autonomy,
+        "completedTools": 0,
+        "toolCounts": {},
+        "uniqueInvocationSignatures": 0,
+        "permissions": 0,
+        "compactions": 0,
+        "guardrails": 0,
+        "steeringPosted": [],
+        "steeringApplied": 0,
+        "cancelPosted": False,
+        "errors": [],
+        "terminal": None,
+    }
+
+    def status_patch(**values):
+        with status_lock:
+            status_state.update(values)
+
+    def status_snapshot():
+        with status_lock:
+            return json.loads(json.dumps(status_state))
+
+    if args.status_port is not None:
+        class StatusHandler(BaseHTTPRequestHandler):
+            def log_message(self, *_):
+                return
+
+            def send_json(self, code, value):
+                body = json.dumps(value, separators=(",", ":")).encode()
+                self.send_response(code)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def do_GET(self):
+                if self.path == "/status":
+                    self.send_json(200, status_snapshot())
+                    return
+                if self.path == "/cancel/" + args.status_token:
+                    try:
+                        code, body = post_json("/cancel", {"requestID": request_id})
+                        status_patch(cancelPosted=bool(code == 200 and body.get("cancelled")))
+                        self.send_json(code, body)
+                    except Exception as exc:
+                        self.send_json(500, {"error": str(exc)[:300]})
+                    return
+                if self.path == "/shutdown/" + args.status_token:
+                    if not status_snapshot().get("done"):
+                        self.send_json(409, {"error": "not_done"})
+                        return
+                    self.send_json(200, {"shutdown": True})
+                    status_done.set()
+                    threading.Thread(target=status_server.shutdown, daemon=True).start()
+                    return
+                self.send_json(404, {"error": "not_found"})
+
+        status_server = ThreadingHTTPServer(("127.0.0.1", args.status_port), StatusHandler)
+        threading.Thread(target=status_server.serve_forever, daemon=True).start()
+
+        def expire_status_server():
+            time.sleep(args.status_ttl)
+            if not status_snapshot().get("done"):
+                try:
+                    post_json("/cancel", {"requestID": request_id})
+                    status_patch(cancelPosted=True, expiryCancel=True)
+                except Exception as exc:
+                    status_patch(expiryCancelError=str(exc)[:300])
+                time.sleep(5)
+            status_done.set()
+            status_server.shutdown()
+
+        threading.Thread(target=expire_status_server, daemon=True).start()
+        print(f"STATUS_ENDPOINT=http://127.0.0.1:{args.status_port}/status")
+
+    status_patch(phase="running")
     with urllib.request.urlopen(request, timeout=args.socket_timeout) as response:
         if response.status != 200:
             raise RuntimeError(f"agent HTTP {response.status}")
@@ -159,6 +259,7 @@ def main() -> int:
                 etype = cc.get("type")
                 if etype == "permission":
                     permissions += 1
+                    status_patch(permissions=permissions)
                     policy = args.permission_policy
                     decision = "reject" if policy == "error" else policy
                     code, body = post_json(
@@ -182,16 +283,19 @@ def main() -> int:
                             tool_counts[name] += 1
                             sig = json.dumps([name, arguments], sort_keys=True, separators=(",", ":"))
                             unique_signatures.add(hashlib.sha256(sig.encode()).hexdigest())
+                            status_patch(completedTools=completed_tools, toolCounts=dict(tool_counts), uniqueInvocationSignatures=len(unique_signatures))
                             for threshold, text in steering:
                                 if completed_tools >= threshold and threshold not in steering_posted:
                                     code, body = post_json("/agent/steer", {"requestID": request_id, "text": text})
                                     if code == 200 and body.get("queued"):
                                         steering_posted.append(threshold)
+                                        status_patch(steeringPosted=list(steering_posted))
                                     else:
                                         errors.append(f"steering failed at {threshold}")
                             if args.cancel_at is not None and completed_tools >= args.cancel_at and not cancel_posted:
                                 code, body = post_json("/cancel", {"requestID": request_id})
                                 cancel_posted = bool(code == 200 and body.get("cancelled"))
+                                status_patch(cancelPosted=cancel_posted)
                                 if not cancel_posted:
                                     errors.append("configured cancellation failed")
                         else:
@@ -199,14 +303,19 @@ def main() -> int:
                             errors.append("tool error: " + name)
                 elif etype == "context_compaction":
                     compactions += 1
+                    status_patch(compactions=compactions)
                 elif etype == "progress_guardrail":
                     guardrails += 1
+                    status_patch(guardrails=guardrails)
                 elif etype == "steering":
                     steering_applied += int(cc.get("count") or 1)
+                    status_patch(steeringApplied=steering_applied)
                 elif etype == "error":
                     errors.append(str(cc.get("message") or "agent error"))
+                    status_patch(errors=list(errors))
                 if cc.get("complete"):
                     terminal = cc
+                    status_patch(terminal=terminal)
                     break
                 continue
 
@@ -266,8 +375,28 @@ def main() -> int:
         "finalChars": len(final_text),
         "finalSha256": hashlib.sha256(final_text.encode()).hexdigest(),
     }
+    status_patch(
+        phase="done",
+        done=True,
+        accepted=accepted,
+        completedTools=completed_tools,
+        toolCounts=dict(tool_counts),
+        uniqueInvocationSignatures=len(unique_signatures),
+        permissions=permissions,
+        compactions=compactions,
+        guardrails=guardrails,
+        steeringPosted=list(steering_posted),
+        steeringApplied=steering_applied,
+        cancelPosted=cancel_posted,
+        errors=list(errors),
+        terminal=terminal,
+        finalChars=len(final_text),
+        finalSha256=hashlib.sha256(final_text.encode()).hexdigest(),
+    )
     emit_summary(summary, args.output)
     print("MARATHON_ACCEPTANCE=" + ("GREEN" if accepted else "RED"))
+    if status_server is not None:
+        status_done.wait()
     return 0 if accepted else 50
 
 
