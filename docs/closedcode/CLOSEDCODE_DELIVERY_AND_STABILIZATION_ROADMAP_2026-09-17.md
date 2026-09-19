@@ -211,6 +211,31 @@ The Director authorization record is:
 
 Op250 remains a mandatory universal hard stop.
 
+## Device-specific APK installation rule
+
+The current device uses the **Google Play distribution of Termux**.
+
+Heavy Engineer / GPT-Termux-Relay must **not attempt to invoke APK installation through Termux or Relay on this device**.
+
+Allowed:
+- build the APK;
+- hash/verify it;
+- copy it to an accessible location;
+- report exact path/version/hash;
+- verify package/version/launch after the Director manually installs it.
+
+Prohibited unless the Director explicitly overrides this rule:
+- `pm install`;
+- `cmd package install*`;
+- package-session / PackageInstallerService tricks;
+- shell-streamed APK installation;
+- `termux-open` or equivalent commands whose purpose is to initiate installation;
+- repeated alternative install mechanisms after one fails.
+
+The normal Android package installer is the installation owner. Stop at a verified APK and ask the Director to install it manually.
+
+Do not burn Relay operation budget attempting installation workarounds.
+
 ## Protected Relay boundary
 
 Do not:
