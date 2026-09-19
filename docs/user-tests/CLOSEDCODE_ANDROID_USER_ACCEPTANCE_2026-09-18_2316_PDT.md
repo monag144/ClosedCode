@@ -146,3 +146,36 @@ For the first authorized post-Op275 work:
 6. only then patch the smallest proved defect.
 
 This test result itself does not release the Op275 hard checkpoint.
+
+## Provider/model double-check — external documentation
+
+### NVIDIA target
+
+The intended exact model remains:
+
+`nvidia/nemotron-3-ultra-550b-a55b`
+
+NVIDIA's current Build/NIM model page describes this as an agentic/reasoning/tool-calling model with a 1M-token context window and exposes a free prototype endpoint.
+
+NVIDIA's NIM/API guidance states that hosted free/trial endpoint rate limits are evaluation/prototyping limits and can vary by model and concurrent demand; the signed-in NVIDIA account view is the correct place to verify the live allowance.
+
+Therefore a public fixed RPM number should not be hard-coded into ClosedCode from third-party anecdotes.
+
+### Z.AI target
+
+The campaign's intended exact Z.AI model remains:
+
+`glm-4.7-flash`
+
+Z.AI's current public developer-document index now foregrounds newer GLM-5.3 / GLM-5.3-Flash models. The project's use of GLM-4.7-Flash is therefore a historical/qualified target rather than the newest model family.
+
+Z.AI's official Rate Limits documentation redirects to the signed-in account rate-limit page. The exact live allowance for the Director's account/key cannot be determined from a public static quota table.
+
+Important distinction:
+
+- prior HE8 `HTTP 429 + code 1305` evidence means temporary overload;
+- a bare `HTTP 429` in the Android UI is insufficient to prove quota exhaustion;
+- ClosedCode should expose the sanitized provider business code/message so overload, rate-limit, plan, and quota conditions can be distinguished.
+
+Current external-provider documentation check does **not** change the ratified model target by itself. Any move from GLM-4.7-Flash to a newer GLM model should be a deliberate compatibility/quality decision after checking the connected catalog and provider entitlement.
+
