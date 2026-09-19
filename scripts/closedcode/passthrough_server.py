@@ -24,7 +24,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.8.5"
+VERSION = "0.8.6"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -523,8 +523,19 @@ def workspace_rel(root: Path, target: Path) -> str:
     return "." if target == root else target.relative_to(root).as_posix()
 
 
-AGENT_MAX_ROUNDS = 32
+AGENT_EMERGENCY_MAX_ROUNDS_DEFAULT = 4096
+AGENT_EMERGENCY_MAX_ROUNDS_MIN = 128
+AGENT_EMERGENCY_MAX_ROUNDS_MAX = 100000
 AGENT_TOOL_RESULT_LIMIT = 128 * 1024
+
+
+def agent_emergency_round_limit() -> int:
+    raw = os.environ.get("CLOSEDCODE_AGENT_EMERGENCY_MAX_ROUNDS", "").strip()
+    try:
+        value = int(raw) if raw else AGENT_EMERGENCY_MAX_ROUNDS_DEFAULT
+    except ValueError:
+        value = AGENT_EMERGENCY_MAX_ROUNDS_DEFAULT
+    return max(AGENT_EMERGENCY_MAX_ROUNDS_MIN, min(AGENT_EMERGENCY_MAX_ROUNDS_MAX, value))
 
 AGENT_TOOLS = [
     {
@@ -1212,6 +1223,7 @@ class Handler(BaseHTTPRequestHandler):
                         "changed or a command was run unless you actually used the corresponding tool. "
                         "Keep actions scoped to the user's assigned development task and selected workspace. "
                         "Prefer inspecting before editing. " + autonomy_note +
+                        "Long missions are expected: continue while useful work remains and do not stop merely because many reasoning or tool rounds were needed. Maintain the original definition of done, avoid duplicate work, and stop promptly once the task is actually complete. "
                         "When the task is complete, inspect the resulting changes and answer concisely with what "
                         "changed and meaningful test/build results."
                     ),
@@ -1224,7 +1236,7 @@ class Handler(BaseHTTPRequestHandler):
                 last_zai_provider_round_finished_at = None
 
                 try:
-                    for round_index in range(AGENT_MAX_ROUNDS):
+                    for round_index in range(agent_emergency_round_limit()):
                         if active_stream_cancelled(request_id):
                             cancelled = True
                             break
@@ -1422,7 +1434,7 @@ class Handler(BaseHTTPRequestHandler):
                             self.wfile.flush()
                         break
                     else:
-                        raise RuntimeError("agent exceeded maximum tool rounds")
+                        raise RuntimeError("agent reached configurable emergency round failsafe")
                 except Exception as exc:
                     error_event = {
                         "closedcode": {
