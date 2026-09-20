@@ -80,6 +80,10 @@ public final class MainActivity extends Activity {
     private int streamGeneration;
     private int eventReconnectAttempt;
     private boolean passthroughSendActive;
+    private boolean appVisible;
+    private boolean providerRunHadError;
+    private String lastCompletionAlertRequestId;
+    private static final String COMPLETION_CHANNEL_ID = "closedcode_agent_completion";
     private static final long PAGE_TRANSITION_MS = 240L;
     private static final PathInterpolator PAGE_TRANSITION_INTERPOLATOR =
             new PathInterpolator(0.22f, 1f, 0.36f, 1f);
@@ -154,7 +158,10 @@ public final class MainActivity extends Activity {
         chatWorkspace.setText(shortPath(directory));
         serverSubtitle.setText(url);
         connectionUrl.setText(url);
+        ensureCompletionChannel();
+        requestCompletionPermission();
         showPage("sessions");
+        handleCompletionIntent(getIntent());
         refreshEverything();
     }
 
@@ -242,6 +249,7 @@ public final class MainActivity extends Activity {
         toggle.setOnCheckedChangeListener((button, checked) -> {
             prefs.edit().putBoolean(key, checked).apply();
             if (securePreview) setSecurePreview(checked);
+            if ("notifyCompleted".equals(key) && checked) requestCompletionPermission();
         });
         findViewById(rowId).setOnClickListener(v -> toggle.setChecked(!toggle.isChecked()));
     }
@@ -814,15 +822,14 @@ public final class MainActivity extends Activity {
                 if (!expectedId.equals(currentSessionId)) return;
                 try {
                     JSONObject root = new JSONObject(body);
-                    JSONArray messages = root.optJSONArray("messages");
-                    if (messages != null) {
-                        for (int i = 0; i < messages.length(); i++) {
-                            JSONObject item = messages.optJSONObject(i);
-                            if (item == null) continue;
-                            String role = item.optString("role", "");
-                            String content = item.optString("content", "");
-                            if (!content.trim().isEmpty()) addMessageBubble(role, content);
+                    JSONArray timeline=root.optJSONArray("timeline"), messages=root.optJSONArray("messages");
+                    if (timeline!=null && timeline.length()>0) {
+                        for(int i=0;i<timeline.length();i++) { JSONObject q=timeline.optJSONObject(i); if(q==null)continue;
+                            if("tool".equals(q.optString("kind"))) addAgentToolBubble(q.optString("name","tool"),q.optString("status","completed"),q.optString("detail",""));
+                            else { String c=q.optString("content",""); if(!c.trim().isEmpty()) addMessageBubble(q.optString("role",""),c); }
                         }
+                    } else if(messages!=null) {
+                        for(int i=0;i<messages.length();i++) { JSONObject q=messages.optJSONObject(i); if(q==null)continue; String c=q.optString("content",""); if(!c.trim().isEmpty()) addMessageBubble(q.optString("role",""),c); }
                     }
                     messageScroll.post(() -> messageScroll.fullScroll(View.FOCUS_DOWN));
                     toolStatus.setText("Idle");
@@ -904,18 +911,27 @@ public final class MainActivity extends Activity {
         registerTranscriptBlock(box);
     }
 
+    private String readableToolActivity(String tool,String status) {
+        String n=tool==null||tool.isEmpty()?"tool":tool, s=status==null||status.isEmpty()?"running":status;
+        if("error".equals(s)) return "A workspace step failed: "+n; boolean d="completed".equals(s);
+        if("workspace_read".equals(n)) return d?"Finished reading project context.":"Reading project context…";
+        if(n.startsWith("workspace_")) return d?"Finished updating workspace files.":"Updating workspace files…";
+        if("shell".equals(n)) return d?"Workspace command finished.":"Running a workspace command…";
+        if(n.startsWith("git_")) return d?"Repository check finished.":"Checking repository state…";
+        return d?"Finished "+n+".":"Working with "+n+"…";
+    }
+
     private void addAgentToolBubble(String tool, String status, String detail) {
-        StringBuilder text = new StringBuilder();
-        text.append("⚙ ").append(tool == null || tool.isEmpty() ? "tool" : tool)
-                .append("  ·  ").append(status == null || status.isEmpty() ? "running" : status);
+        String n=tool==null||tool.isEmpty()?"tool":tool, s=status==null||status.isEmpty()?"running":status;
+        StringBuilder text=new StringBuilder();
+        text.append(readableToolActivity(n,s)).append("\nTechnical: ⚙ ").append(n).append("  ·  ").append(s);
         if (detail != null && !detail.isEmpty()) text.append("\n").append(trim(detail, 180));
         TextView v = simpleText(text.toString(), 12, R.color.cc_muted);
         v.setBackgroundResource(R.drawable.bg_card);
         v.setPadding(dp(12), dp(10), dp(12), dp(10));
         messageList.addView(v, matchWrapMargins(0, 4, 36, 4));
         registerTranscriptBlock(v);
-        toolStatus.setText((tool == null || tool.isEmpty() ? "tool" : tool)
-                + " · " + (status == null || status.isEmpty() ? "running" : status));
+        toolStatus.setText(readableToolActivity(n,s));
         messageScroll.post(() -> messageScroll.fullScroll(View.FOCUS_DOWN));
     }
 
@@ -1160,6 +1176,7 @@ public final class MainActivity extends Activity {
         activeProviderRequestId = requestId;
         providerStreamText.setLength(0);
         providerStreamBody = null;
+        providerRunHadError = false;
         toolStatus.setText("Agent · " + providerId);
         setPromptRunning(true);
         api.streamAgentPrompt(
@@ -1193,6 +1210,7 @@ public final class MainActivity extends Activity {
 
                     @Override public void error(String message) {
                         if (!expectedId.equals(currentSessionId) || !requestId.equals(activeProviderRequestId)) return;
+                        providerRunHadError = true;
                         toolStatus.setText("Agent error");
                         addMessageBubble("system", "Agent: " + message);
                     }
@@ -1204,6 +1222,7 @@ public final class MainActivity extends Activity {
                         passthroughSendActive = false;
                         setPromptRunning(false);
                         toolStatus.setText(cancelled ? "Stopped" : "Agent complete");
+                        if(!cancelled && !providerRunHadError) signalCompletion(requestId,expectedId,chatTitle.getText().toString(),providerId,modelId);
                     }
 
                     @Override public void failure(String message) {
@@ -1868,6 +1887,22 @@ public final class MainActivity extends Activity {
     private void toast(String value) {
         Toast.makeText(this, value, Toast.LENGTH_LONG).show();
     }
+
+    private void ensureCompletionChannel(){ android.app.NotificationManager n=(android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE); if(n==null)return; android.app.NotificationChannel c=new android.app.NotificationChannel(COMPLETION_CHANNEL_ID,"Agent completions",android.app.NotificationManager.IMPORTANCE_DEFAULT); c.setSound(android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION),null); n.createNotificationChannel(c); }
+    private void requestCompletionPermission(){ if(android.os.Build.VERSION.SDK_INT>=33 && prefs!=null && prefs.getBoolean("notifyCompleted",true) && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED) requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},914); }
+    private void signalCompletion(String rid,String sid,String title,String provider,String model){
+        if(prefs==null||!prefs.getBoolean("notifyCompleted",true)||rid.equals(lastCompletionAlertRequestId))return; lastCompletionAlertRequestId=rid;
+        if(appVisible){ try{ android.media.Ringtone q=android.media.RingtoneManager.getRingtone(this,android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)); if(q!=null)q.play(); }catch(Exception ignored){} return; }
+        if(android.os.Build.VERSION.SDK_INT>=33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)return;
+        Intent i=new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("cc.sid",sid).putExtra("cc.title",title);
+        android.app.PendingIntent p=android.app.PendingIntent.getActivity(this,sid.hashCode(),i,android.app.PendingIntent.FLAG_UPDATE_CURRENT|android.app.PendingIntent.FLAG_IMMUTABLE);
+        android.app.Notification n=new android.app.Notification.Builder(this,COMPLETION_CHANNEL_ID).setSmallIcon(android.R.drawable.stat_sys_download_done).setContentTitle("ClosedCode · Agent complete").setContentText((title==null||title.isEmpty()?"Session complete":title)+" · "+provider+" · "+model).setContentIntent(p).setAutoCancel(true).build();
+        android.app.NotificationManager nm=(android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE); if(nm!=null)nm.notify(sid.hashCode(),n);
+    }
+    private void handleCompletionIntent(Intent i){ if(i==null)return; String sid=i.getStringExtra("cc.sid"); if(sid==null||sid.isEmpty()||sid.equals(currentSessionId))return; String t=i.getStringExtra("cc.title"); openSession(sid,t==null?"ClosedCode session":t); }
+    @Override protected void onStart(){super.onStart();appVisible=true;}
+    @Override protected void onStop(){appVisible=false;super.onStop();}
+    @Override protected void onNewIntent(Intent i){super.onNewIntent(i);setIntent(i);handleCompletionIntent(i);}
 
     @Override protected void onDestroy() {
         streamGeneration++;

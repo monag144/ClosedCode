@@ -24,7 +24,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.8.14"
+VERSION = "0.8.15"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -521,6 +521,27 @@ def append_history(session_id: str, messages) -> list[dict]:
     os.chmod(temp, 0o600)
     os.replace(temp, path)
     return history
+
+
+def timeline_path(sid):
+    p=history_path(sid)
+    return p.with_name(p.stem+".timeline.json")
+
+def load_timeline(sid):
+    p=timeline_path(sid)
+    if not p.is_file(): return []
+    v=json.loads(p.read_text(encoding="utf-8"))
+    if not isinstance(v,list): raise ValueError("invalid timeline")
+    return v
+
+def append_timeline(sid,items):
+    if not isinstance(items,list) or not all(isinstance(q,dict) and q.get("kind") in {"message","tool"} for q in items):
+        raise ValueError("invalid timeline")
+    v=(load_timeline(sid)+items)[-MAX_HISTORY_MESSAGES*8:]
+    root=history_root(); root.mkdir(parents=True,exist_ok=True,mode=0o700); os.chmod(root,0o700)
+    p=timeline_path(sid); t=p.with_suffix(".tmp")
+    t.write_text(json.dumps(v,ensure_ascii=False,separators=(",",":")),encoding="utf-8"); os.chmod(t,0o600); os.replace(t,p)
+    return v
 
 
 MAX_FILE_BYTES = 2 * 1024 * 1024
@@ -1137,7 +1158,7 @@ class Handler(BaseHTTPRequestHandler):
                 session_id = values[0] if values else ""
                 self.send_json(
                     200,
-                    {"sessionID": session_id, "messages": load_history(session_id)},
+                    {"sessionID": session_id, "messages": load_history(session_id), "timeline": load_timeline(session_id)},
                 )
             except ValueError as exc:
                 self.send_json(400, {"error": "invalid_request", "message": str(exc)})
@@ -1347,6 +1368,7 @@ class Handler(BaseHTTPRequestHandler):
                 current_history_messages = normalize_history_messages(messages)
                 if not current_history_messages:
                     raise ValueError("messages must be a non-empty array")
+                current_timeline=[{"kind":"message","role":q["role"],"content":q["content"]} for q in current_history_messages]
                 if finalize_after_tools is not None:
                     if isinstance(finalize_after_tools, bool) or not isinstance(finalize_after_tools, int):
                         raise ValueError("finalizeAfterTools must be an integer")
@@ -1418,6 +1440,7 @@ class Handler(BaseHTTPRequestHandler):
                                 steering_message = {"role": "user", "content": steering_text}
                                 conversation.append(steering_message)
                                 current_history_messages.append(steering_message)
+                                current_timeline.append({"kind":"message","role":"user","content":steering_text})
                             steering_event = {
                                 "closedcode": {
                                     "type": "steering",
@@ -1663,6 +1686,7 @@ class Handler(BaseHTTPRequestHandler):
                                         "detail": result_text[:1000],
                                     }
                                 }
+                                current_timeline.append({"kind":"tool","name":name,"status":"completed" if result.get("ok") else "error","detail":result_text[:1000]})
                                 self.wfile.write(("data: " + json.dumps(result_event, separators=(",", ":")) + "\n\n").encode("utf-8"))
                                 self.wfile.flush()
                                 recent_tool_signatures.append(agent_tool_signature(name, arguments, result))
@@ -1728,6 +1752,9 @@ class Handler(BaseHTTPRequestHandler):
                             additions.append({"role": "assistant", "content": final_text})
                         if additions:
                             append_history(session_id, additions)
+                        tv=list(current_timeline)
+                        if final_text: tv.append({"kind":"message","role":"assistant","content":final_text})
+                        if tv: append_timeline(session_id,tv)
                     except Exception:
                         pass
                     try:
