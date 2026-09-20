@@ -24,7 +24,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.8.11"
+VERSION = "0.8.12"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -1309,6 +1309,7 @@ class Handler(BaseHTTPRequestHandler):
                 root_value = payload.get("root")
                 autonomy = payload.get("autonomy", "ask")
                 messages = payload.get("messages")
+                finalize_after_tools = payload.get("finalizeAfterTools")
                 if autonomy not in {"ask", "yolo"}:
                     raise ValueError("autonomy must be ask or yolo")
                 if provider_id not in PROVIDERS:
@@ -1320,6 +1321,11 @@ class Handler(BaseHTTPRequestHandler):
                 current_history_messages = normalize_history_messages(messages)
                 if not current_history_messages:
                     raise ValueError("messages must be a non-empty array")
+                if finalize_after_tools is not None:
+                    if isinstance(finalize_after_tools, bool) or not isinstance(finalize_after_tools, int):
+                        raise ValueError("finalizeAfterTools must be an integer")
+                    if finalize_after_tools < 1 or finalize_after_tools > 100000:
+                        raise ValueError("finalizeAfterTools must be between 1 and 100000")
 
                 active_stream_register(request_id, None)
                 self.send_response(200)
@@ -1361,6 +1367,8 @@ class Handler(BaseHTTPRequestHandler):
                 recent_tool_signatures = []
                 stagnation_interventions = 0
                 productive_tools_since_guardrail = 0
+                successful_tool_actions = 0
+                finalization_mode = False
 
                 try:
                     for round_index in range(agent_emergency_round_limit()):
@@ -1402,14 +1410,37 @@ class Handler(BaseHTTPRequestHandler):
                             self.wfile.write(("data: " + json.dumps(event, separators=(",", ":")) + "\n\n").encode("utf-8"))
                             self.wfile.flush()
 
+                        if finalize_after_tools is not None and successful_tool_actions >= finalize_after_tools and not finalization_mode:
+                            finalization_mode = True
+                            conversation.append({
+                                "role": "system",
+                                "content": (
+                                    "Explicit finalization boundary reached after the requested successful-tool threshold. "
+                                    "Tool use is now disabled for this request. Synthesize the final answer from the evidence already gathered, "
+                                    "preserve every user requirement and required output marker, and do not request additional tools."
+                                ),
+                            })
+                            event = {
+                                "closedcode": {
+                                    "type": "finalization",
+                                    "requestID": request_id,
+                                    "status": "required",
+                                    "successfulTools": successful_tool_actions,
+                                    "threshold": finalize_after_tools,
+                                }
+                            }
+                            self.wfile.write(("data: " + json.dumps(event, separators=(",", ":")) + "\n\n").encode("utf-8"))
+                            self.wfile.flush()
+
                         upstream_payload = {
                             "model": model,
                             "messages": conversation,
-                            "tools": AGENT_TOOLS,
-                            "tool_choice": "auto",
                             "temperature": 0,
                             "stream": False,
                         }
+                        if not finalization_mode:
+                            upstream_payload["tools"] = AGENT_TOOLS
+                            upstream_payload["tool_choice"] = "auto"
                         completion = (
                             agent_provider_stream_completion
                             if provider_id == "zai"
@@ -1435,6 +1466,8 @@ class Handler(BaseHTTPRequestHandler):
                             raise RuntimeError("provider response missing message")
 
                         tool_calls = message.get("tool_calls")
+                        if finalization_mode and isinstance(tool_calls, list) and tool_calls:
+                            raise RuntimeError("provider returned tool calls after explicit finalization disabled tools")
                         if not (isinstance(tool_calls, list) and tool_calls):
                             queued_steering = active_stream_take_steering(request_id)
                             if queued_steering:
@@ -1531,6 +1564,8 @@ class Handler(BaseHTTPRequestHandler):
                                         result = agent_tool_result(root_value, name, arguments)
                                 except Exception as exc:
                                     result = {"ok": False, "error": str(exc)}
+                                if result.get("ok"):
+                                    successful_tool_actions += 1
                                 result_text = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
                                 if len(result_text.encode("utf-8")) > AGENT_TOOL_RESULT_LIMIT:
                                     result_text = json.dumps({

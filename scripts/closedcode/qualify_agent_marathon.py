@@ -95,6 +95,7 @@ def main() -> int:
     prompts.add_argument("--prompt")
     prompts.add_argument("--prompt-file")
     parser.add_argument("--min-tools", type=int, default=100)
+    parser.add_argument("--finalize-after-tools", type=int)
     parser.add_argument("--steer", action="append", type=parse_steer, default=[])
     parser.add_argument("--cancel-at", type=int)
     parser.add_argument("--permission-policy", choices=("reject", "allow", "error"), default="error")
@@ -111,6 +112,11 @@ def main() -> int:
         parser.error("--min-tools must be >= 0")
     if args.cancel_at is not None and args.cancel_at < 1:
         parser.error("--cancel-at must be >= 1")
+    if args.finalize_after_tools is not None:
+        if args.finalize_after_tools < 1:
+            parser.error("--finalize-after-tools must be >= 1")
+        if args.finalize_after_tools < args.min_tools:
+            parser.error("--finalize-after-tools must be >= --min-tools")
     if args.max_permissions < 0:
         parser.error("--max-permissions must be >= 0")
     if args.status_port is not None and not (1 <= args.status_port <= 65535):
@@ -134,6 +140,7 @@ def main() -> int:
         "root": str(root),
         "autonomy": args.autonomy,
         "minTools": args.min_tools,
+        "finalizeAfterTools": args.finalize_after_tools,
         "steeringThresholds": [count for count, _ in steering],
         "cancelAt": args.cancel_at,
         "permissionPolicy": args.permission_policy,
@@ -157,6 +164,8 @@ def main() -> int:
         "autonomy": args.autonomy,
         "messages": [{"role": "user", "content": prompt}],
     }
+    if args.finalize_after_tools is not None:
+        payload["finalizeAfterTools"] = args.finalize_after_tools
     request = urllib.request.Request(
         BASE + "/agent",
         data=json.dumps(payload, separators=(",", ":")).encode(),
@@ -174,6 +183,7 @@ def main() -> int:
     permission_actions = Counter()
     compactions = 0
     guardrails = 0
+    finalization_triggered = False
     steering_posted = []
     steering_applied = 0
     cancel_posted = False
@@ -201,6 +211,7 @@ def main() -> int:
         "permissions": 0,
         "compactions": 0,
         "guardrails": 0,
+        "finalizationTriggered": False,
         "steeringPosted": [],
         "steeringApplied": 0,
         "cancelPosted": False,
@@ -337,6 +348,9 @@ def main() -> int:
                 elif etype == "progress_guardrail":
                     guardrails += 1
                     status_patch(guardrails=guardrails)
+                elif etype == "finalization":
+                    finalization_triggered = True
+                    status_patch(finalizationTriggered=True)
                 elif etype == "steering":
                     steering_applied += int(cc.get("count") or 1)
                     status_patch(steeringApplied=steering_applied)
@@ -389,6 +403,8 @@ def main() -> int:
         "permissionActions": dict(permission_actions),
         "compactions": compactions,
         "guardrails": guardrails,
+        "finalizeAfterTools": args.finalize_after_tools,
+        "finalizationTriggered": finalization_triggered,
         "steeringScheduled": [count for count, _ in steering],
         "steeringPosted": steering_posted,
         "steeringApplied": steering_applied,
@@ -409,6 +425,7 @@ def main() -> int:
         permissions=permissions,
         compactions=compactions,
         guardrails=guardrails,
+        finalizationTriggered=finalization_triggered,
         steeringPosted=list(steering_posted),
         steeringApplied=steering_applied,
         cancelPosted=cancel_posted,
