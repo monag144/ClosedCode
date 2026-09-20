@@ -24,7 +24,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.8.9"
+VERSION = "0.8.10"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -531,6 +531,10 @@ AGENT_CONTEXT_COMPACT_AFTER_CHARS_MIN = 65536
 AGENT_CONTEXT_COMPACT_AFTER_CHARS_MAX = 4000000
 AGENT_CONTEXT_KEEP_RECENT_MESSAGES = 48
 AGENT_CONTEXT_EVIDENCE_LIMIT = 80
+AGENT_CONTEXT_CHECKPOINT_PREFIX = "ClosedCode mission context checkpoint."
+AGENT_CONTEXT_INSTRUCTIONS_JSON_HEADER = "Earlier user and steering instructions preserved verbatim JSON:\n"
+AGENT_CONTEXT_INSTRUCTIONS_LEGACY_HEADER = "Earlier user and steering instructions preserved verbatim:\n"
+AGENT_CONTEXT_EVIDENCE_HEADER = "\n\nEarlier execution evidence summary:"
 AGENT_STAGNATION_REPEAT_THRESHOLD = 4
 AGENT_STAGNATION_MAX_INTERVENTIONS = 3
 AGENT_STAGNATION_RESET_AFTER_PRODUCTIVE_TOOLS = 12
@@ -559,6 +563,28 @@ def agent_context_chars(conversation) -> int:
     return len(json.dumps(conversation, ensure_ascii=False, separators=(",", ":")))
 
 
+def agent_context_checkpoint_users(content) -> list[str]:
+    if not isinstance(content, str) or not content.startswith(AGENT_CONTEXT_CHECKPOINT_PREFIX):
+        return []
+    if AGENT_CONTEXT_INSTRUCTIONS_JSON_HEADER in content:
+        body = content.split(AGENT_CONTEXT_INSTRUCTIONS_JSON_HEADER, 1)[1]
+        if AGENT_CONTEXT_EVIDENCE_HEADER in body:
+            body = body.split(AGENT_CONTEXT_EVIDENCE_HEADER, 1)[0]
+        try:
+            values = json.loads(body)
+        except json.JSONDecodeError:
+            return []
+        if not isinstance(values, list):
+            return []
+        return [value for value in values if isinstance(value, str) and value]
+    if AGENT_CONTEXT_INSTRUCTIONS_LEGACY_HEADER in content:
+        body = content.split(AGENT_CONTEXT_INSTRUCTIONS_LEGACY_HEADER, 1)[1]
+        if AGENT_CONTEXT_EVIDENCE_HEADER in body:
+            body = body.split(AGENT_CONTEXT_EVIDENCE_HEADER, 1)[0]
+        return [value for value in body.split("\n---\n") if value]
+    return []
+
+
 def agent_compact_conversation(conversation):
     before = agent_context_chars(conversation)
     if before <= agent_context_compact_limit() or len(conversation) <= AGENT_CONTEXT_KEEP_RECENT_MESSAGES + 2:
@@ -573,7 +599,9 @@ def agent_compact_conversation(conversation):
     for item in removed:
         role = item.get("role")
         content = item.get("content")
-        if role == "user" and isinstance(content, str):
+        if role == "system":
+            users.extend(agent_context_checkpoint_users(content))
+        elif role == "user" and isinstance(content, str):
             users.append(content)
         elif role == "assistant":
             calls = item.get("tool_calls")
@@ -588,13 +616,14 @@ def agent_compact_conversation(conversation):
                 evidence.append("assistant note: " + content.strip()[:500])
         elif role == "tool" and isinstance(content, str):
             evidence.append(str(item.get("name", "tool")) + ": " + content[:700])
+    users = list(dict.fromkeys(users))
     evidence = evidence[-AGENT_CONTEXT_EVIDENCE_LIMIT:]
     parts = [
-        "ClosedCode mission context checkpoint. Continue the same mission; older tool chatter was compacted, not completed.",
+        AGENT_CONTEXT_CHECKPOINT_PREFIX + " Continue the same mission; older tool chatter was compacted, not completed.",
         "Do not broaden scope. Re-inspect live state before relying on summarized execution evidence.",
     ]
     if users:
-        parts.append("Earlier user and steering instructions preserved verbatim:\n" + "\n---\n".join(users))
+        parts.append(AGENT_CONTEXT_INSTRUCTIONS_JSON_HEADER + json.dumps(users, ensure_ascii=False, separators=(",", ":")))
     if evidence:
         parts.append("Earlier execution evidence summary:\n- " + "\n- ".join(evidence))
     checkpoint = {"role":"system","content":"\n\n".join(parts)}
