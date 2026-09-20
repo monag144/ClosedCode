@@ -2,6 +2,133 @@
 
 **Timestamp:** 2026-09-17
 
+## Objective Checklist — 2026-09-20
+
+This checklist supplements the historical operation-range sections below. The historical ranges remain provenance; this checklist is the compact product-objective view for later Heavy Engineer reviews.
+
+Legend:
+
+- `[x]` — implemented and supported by durable evidence.
+- `[~]` — implemented in substantial part; one or more explicit acceptance gates remain.
+- `[ ]` — not yet accepted.
+- `[-]` — optional/deferred and not a release blocker unless separately promoted by the Director.
+
+### Core objectives
+
+- [x] ClosedCode Android APK communicates with a localhost ClosedCode backend/control layer in Termux.
+- [x] ClosedCode owns the provider compatibility boundary; OpenCode is optional compatibility/reference infrastructure rather than mandatory transit for every provider.
+- [x] Exact NVIDIA target `nvidia/nemotron-3-ultra-550b-a55b` is supported through the ClosedCode-native path.
+- [x] Exact Z.AI target `glm-4.7-flash` is supported through the ClosedCode-native path.
+- [x] Provider/model selection, authenticated requests, durable sessions, streaming/event delivery, file/tool execution, steering, and cancellation primitives exist.
+- [x] Agent-native project manipulation exists: list/read/search, targeted write/patch, create directory, move/rename, delete, shell, Git status/diff/history.
+- [x] Long-horizon execution no longer depends on a small normal round ceiling.
+- [x] Repeated context compaction preserves mission instructions, negative constraints, steering, and recent continuity through deterministic regression.
+- [x] Progress/stagnation guardrails distinguish productive long runs from repeated no-progress loops.
+- [x] Terminal outcomes are machine-visible as completed, cancelled, blocked_stagnation, resource_limit, or error.
+- [x] Marathon Harness exists as qualification infrastructure and has demonstrated 100+ real tool-call execution.
+- [~] Bounded finalization exists through opt-in `finalizeAfterTools`; real-provider acceptance of the bounded-finalization contract remains to be closed.
+- [ ] One real long-horizon qualification must finish with trustworthy `termination=completed`, non-empty final prose, preserved mission/steering constraints, and the required final-report contract.
+- [ ] Deep cancellation regression must prove cancellation remains responsive after substantial tool activity/compaction and leaves no orphaned provider, permission, retry, observer, or runtime state.
+- [ ] ASK / GUARDED regression must prove approval, rejection, mission preservation while waiting, and cancellation during a permission wait.
+- [ ] YOLO / FULL DANGER ACCESS regression must prove routine project-scoped autonomy without routine prompts while preserving workspace/task boundaries.
+- [ ] Final regression must prove the finished Android client + backend + provider/tool path as one integrated coding-agent product.
+- [ ] Produce a release-candidate APK, hash/verify it, copy it to an accessible device path, and stop before installation so the Director can install it through Android.
+
+### Primary objectives
+
+- [ ] Repair the first-message-history defect in which a new thread can lose the first visible user prompt.
+- [ ] Repair transcript chronology so tool events cannot appear after final assistant prose unless they genuinely occurred later.
+- [ ] Preserve request/session/event ordering through reload, reconnect, and Copy Session/export.
+- [ ] Add completion sound behavior for successful terminal completion.
+- [ ] Add Android notification-tray completion notification when ClosedCode is not foreground-visible.
+- [ ] Add transcript snap-to-top / snap-to-bottom navigation controls without cluttering the primary agent surface.
+- [ ] Reorganize top controls so growth in functionality does not cause permanent primary-screen sprawl.
+- [ ] Add theme controls in Settings rather than on the primary agent screen.
+- [ ] Provide Light and Dark themes.
+- [ ] Provide Chocolate Mint as an additional theme.
+- [ ] Complete Android lifecycle/reconnect regression after transcript/session repairs.
+- [ ] Preserve visible provider/model/session/workspace/autonomy identity without expanding the top-level UI unnecessarily.
+
+### Secondary objectives
+
+- [ ] Reduce unnecessary API calls, redundant reloads, and avoidable latency discovered during regression.
+- [ ] Improve diagnostics so provider business codes/messages, termination reasons, and actionable runtime failures remain visible without leaking secrets.
+- [ ] Continue hardening packet/control-plane helpers so process ownership, JSON validation, and evidence collection use structural methods instead of fragile text matching.
+- [ ] Keep qualification artifacts, checkpoint evidence, and five-/twenty-operation reviews split into navigable documents rather than allowing checkpoint files to become the only source of truth.
+- [ ] Retire dead code, obsolete temporary scaffolding, and superseded qualification machinery once replacement paths are proven.
+- [ ] Keep build/package/version/hash evidence deterministic and reproducible.
+- [ ] Keep real-device testing as a required part of Android defect and release validation.
+
+### Optional objectives
+
+- [-] Additional theme packs beyond Light, Dark, and Chocolate Mint.
+- [-] System-theme following as a third appearance mode.
+- [-] Manual file-browser/editor expansion beyond what is necessary to support the coding-agent workflow.
+- [-] Additional transcript convenience actions beyond top/bottom navigation and Copy Session.
+- [-] Additional provider adapters after the release candidate unless separately promoted by the Director.
+- [-] Cosmetic animation, decorative UI, or branding work that does not improve agent usability, correctness, or accessibility.
+
+## Completion semantics — 2026-09-20
+
+ClosedCode completion is mission-driven rather than universally tool-count-driven.
+
+The `finalizeAfterTools` mechanism is an opt-in qualification/bounded-task control. It must not become a universal production rule such as "all missions stop at 120 tools."
+
+Normal agent execution should continue while meaningful progress is being made and should end when:
+
+- the assigned definition of done is satisfied;
+- a genuine blocker remains;
+- the agent needs information only the user can supply;
+- the user cancels;
+- or a real safety/resource condition requires termination.
+
+High tool count alone is not failure. Low tool count alone is not success. The accepted result is the completed mission with trustworthy evidence and preserved constraints.
+
+## Qualification infrastructure boundary — 2026-09-20
+
+The Marathon Harness is test/qualification infrastructure, not a second coding agent.
+
+It may:
+
+- launch one intended ClosedCode agent qualification request;
+- observe event/status evidence;
+- count tool calls, unique signatures, compactions, permissions, errors, guardrails, steering, and terminal state;
+- post predetermined steering at predetermined thresholds;
+- issue cancellation when cancellation itself is the test;
+- capture final evidence and classify the run.
+
+It must not:
+
+- make repository/coding decisions on behalf of the provider model;
+- inspect the repository independently and feed answers to the provider model;
+- patch ClosedCode as part of the qualification run;
+- silently change the definition of done;
+- restart failed missions until one happens to pass;
+- bypass ASK/YOLO semantics;
+- become required production transit between Android and the ClosedCode agent.
+
+## UI stability principle — 2026-09-20
+
+ClosedCode should prefer adding capability behind stable interaction surfaces rather than continually expanding the primary agent screen.
+
+Preferred placement order for new functionality:
+
+1. backend/runtime behavior when no new direct control is required;
+2. existing interaction surface;
+3. Settings;
+4. contextual menu, sheet, or dialog;
+5. permanent primary-screen control only when the action is frequent enough to justify persistent space.
+
+Once the release UI is accepted, preserve stable placement and behavior of the core interaction surfaces unless a demonstrated usability/correctness problem requires change.
+
+In particular:
+
+- theme selection belongs in Settings;
+- completion-sound and notification controls belong in Settings / Android notification channels;
+- infrequent actions should prefer contextual surfaces;
+- the composer, transcript, Send/Steer/Stop behavior, session access, and provider/model access should not be repeatedly rearranged merely because new backend capability is added;
+- feature growth should not automatically imply primary-screen growth.
+
 ## Architecture
 
 ClosedCode Android APK → localhost ClosedCode backend/control layer in Termux → supported provider/runtime adapters + filesystem/tools.
