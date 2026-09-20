@@ -24,7 +24,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.8.10"
+VERSION = "0.8.11"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -183,12 +183,23 @@ def agent_permission_unregister(permission_id: str):
 
 
 RETRYABLE_PROVIDER_STATUS = {429, 500, 502, 503, 504}
-PROVIDER_MAX_ATTEMPTS = 4
+PROVIDER_MAX_ATTEMPTS = 8
 PROVIDER_RETRY_AFTER_CAP_SECONDS = 30.0
 PROVIDER_RATE_LIMIT_BASE_DELAY_SECONDS = 4.0
 ZAI_MIN_AGENT_ROUND_INTERVAL_SECONDS = 20.0
 PROVIDER_TRANSIENT_BASE_DELAY_SECONDS = 0.75
 PROVIDER_TRANSIENT_DELAY_CAP_SECONDS = 6.0
+PROVIDER_TRANSPORT_REASON_MAX_CHARS = 240
+
+
+def provider_transport_error_message(exc: Exception) -> str:
+    reason = getattr(exc, "reason", None)
+    detail = str(reason if reason is not None else exc).strip()
+    detail = " ".join(detail.split())
+    if detail:
+        detail = detail[:PROVIDER_TRANSPORT_REASON_MAX_CHARS]
+        return "provider transport error: " + exc.__class__.__name__ + ": " + detail
+    return "provider transport error: " + exc.__class__.__name__
 
 
 def provider_retry_after_seconds(headers) -> float | None:
@@ -270,7 +281,7 @@ def agent_provider_completion(provider_id: str, upstream_url: str, key: str, pay
             retryable = status in RETRYABLE_PROVIDER_STATUS
         except (urlerror.URLError, TimeoutError, OSError) as exc:
             active_stream_set_upstream(request_id, None)
-            last_error = "provider transport error: " + exc.__class__.__name__
+            last_error = provider_transport_error_message(exc)
             retryable = True
         if not retryable or attempt >= PROVIDER_MAX_ATTEMPTS:
             raise RuntimeError(last_error + " after " + str(attempt) + " attempt(s)")
@@ -390,7 +401,7 @@ def agent_provider_stream_completion(provider_id: str, upstream_url: str, key: s
             retryable = status in RETRYABLE_PROVIDER_STATUS
         except (urlerror.URLError, TimeoutError, OSError) as exc:
             active_stream_set_upstream(request_id, None)
-            last_error = "provider transport error: " + exc.__class__.__name__
+            last_error = provider_transport_error_message(exc)
             retryable = True
         if not retryable or attempt >= PROVIDER_MAX_ATTEMPTS:
             raise RuntimeError(last_error + " after " + str(attempt) + " attempt(s)")
