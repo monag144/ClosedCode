@@ -1,0 +1,30 @@
+name: Build Speech Duck APK
+
+on:
+  push:
+    branches:
+      - speechduck-build
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure Android 34 build tools
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Build and sign APK
+        run: bash speechduck/build.sh
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SpeechDuck-v0.1.0
+          path: |
+            speechduck/out/SpeechDuck-v0.1.0.apk
+            speechduck/out/SpeechDuck-v0.1.0.apk.sha256
+          if-no-files-found: error
