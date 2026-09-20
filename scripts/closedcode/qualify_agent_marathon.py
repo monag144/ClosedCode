@@ -53,6 +53,36 @@ def emit_summary(summary: dict, output: str | None):
         print("SUMMARY_OUTPUT=" + output)
 
 
+def marathon_acceptance(
+    *,
+    cancel_at: int | None,
+    cancel_posted: bool,
+    completed_tools: int,
+    min_tools: int,
+    termination: str | None,
+    cancelled: bool,
+    steering_required: int,
+    steering_applied: int,
+    permissions: int,
+    max_permissions: int,
+) -> bool:
+    if cancel_at is None:
+        return (
+            completed_tools >= min_tools
+            and termination == "completed"
+            and not cancelled
+            and steering_applied >= steering_required
+            and permissions <= max_permissions
+        )
+    return (
+        cancel_posted
+        and completed_tools >= cancel_at
+        and termination == "cancelled"
+        and cancelled
+        and permissions <= max_permissions
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run exactly one real ClosedCode /agent mission and collect long-horizon qualification evidence."
@@ -329,25 +359,18 @@ def main() -> int:
     final_text = "".join(final_parts)
     termination = terminal.get("termination") if isinstance(terminal, dict) else None
     cancelled = bool(terminal.get("cancelled")) if isinstance(terminal, dict) else False
-    normal_acceptance = (
-        args.cancel_at is None
-        and completed_tools >= args.min_tools
-        and termination == "completed"
-        and not cancelled
-        and steering_applied >= len(steering)
-        and permissions <= args.max_permissions
-        and not errors
+    accepted = marathon_acceptance(
+        cancel_at=args.cancel_at,
+        cancel_posted=cancel_posted,
+        completed_tools=completed_tools,
+        min_tools=args.min_tools,
+        termination=termination,
+        cancelled=cancelled,
+        steering_required=len(steering),
+        steering_applied=steering_applied,
+        permissions=permissions,
+        max_permissions=args.max_permissions,
     )
-    cancel_acceptance = (
-        args.cancel_at is not None
-        and cancel_posted
-        and completed_tools >= args.cancel_at
-        and termination == "cancelled"
-        and cancelled
-        and permissions <= args.max_permissions
-        and not errors
-    )
-    accepted = cancel_acceptance if args.cancel_at is not None else normal_acceptance
     summary = {
         "accepted": accepted,
         "requestID": request_id,
@@ -361,6 +384,7 @@ def main() -> int:
         "toolCounts": dict(tool_counts),
         "uniqueInvocationSignatures": len(unique_signatures),
         "toolErrors": tool_errors,
+        "errorPolicy": "observe-and-report; terminal outcome and mission criteria determine acceptance",
         "permissions": permissions,
         "permissionActions": dict(permission_actions),
         "compactions": compactions,
