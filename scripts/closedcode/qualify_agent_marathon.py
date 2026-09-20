@@ -184,6 +184,7 @@ def main() -> int:
     compactions = 0
     guardrails = 0
     finalization_triggered = False
+    finalization_retries = 0
     steering_posted = []
     steering_applied = 0
     cancel_posted = False
@@ -212,6 +213,7 @@ def main() -> int:
         "compactions": 0,
         "guardrails": 0,
         "finalizationTriggered": False,
+        "finalizationRetries": 0,
         "steeringPosted": [],
         "steeringApplied": 0,
         "cancelPosted": False,
@@ -351,6 +353,9 @@ def main() -> int:
                 elif etype == "finalization":
                     finalization_triggered = True
                     status_patch(finalizationTriggered=True)
+                elif etype == "finalization_retry":
+                    finalization_retries += 1
+                    status_patch(finalizationRetries=finalization_retries)
                 elif etype == "steering":
                     steering_applied += int(cc.get("count") or 1)
                     status_patch(steeringApplied=steering_applied)
@@ -405,6 +410,7 @@ def main() -> int:
         "guardrails": guardrails,
         "finalizeAfterTools": args.finalize_after_tools,
         "finalizationTriggered": finalization_triggered,
+        "finalizationRetries": finalization_retries,
         "steeringScheduled": [count for count, _ in steering],
         "steeringPosted": steering_posted,
         "steeringApplied": steering_applied,
@@ -426,6 +432,7 @@ def main() -> int:
         compactions=compactions,
         guardrails=guardrails,
         finalizationTriggered=finalization_triggered,
+        finalizationRetries=finalization_retries,
         steeringPosted=list(steering_posted),
         steeringApplied=steering_applied,
         cancelPosted=cancel_posted,

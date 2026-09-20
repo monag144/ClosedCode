@@ -24,7 +24,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.8.12"
+VERSION = "0.8.13"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -549,6 +549,7 @@ AGENT_CONTEXT_EVIDENCE_HEADER = "\n\nEarlier execution evidence summary:"
 AGENT_STAGNATION_REPEAT_THRESHOLD = 4
 AGENT_STAGNATION_MAX_INTERVENTIONS = 3
 AGENT_STAGNATION_RESET_AFTER_PRODUCTIVE_TOOLS = 12
+AGENT_FINALIZATION_MAX_RETRIES = 3
 AGENT_TOOL_RESULT_LIMIT = 128 * 1024
 
 
@@ -1369,6 +1370,7 @@ class Handler(BaseHTTPRequestHandler):
                 productive_tools_since_guardrail = 0
                 successful_tool_actions = 0
                 finalization_mode = False
+                finalization_retries = 0
 
                 try:
                     for round_index in range(agent_emergency_round_limit()):
@@ -1438,9 +1440,8 @@ class Handler(BaseHTTPRequestHandler):
                             "temperature": 0,
                             "stream": False,
                         }
-                        if not finalization_mode:
-                            upstream_payload["tools"] = AGENT_TOOLS
-                            upstream_payload["tool_choice"] = "auto"
+                        upstream_payload["tools"] = AGENT_TOOLS
+                        upstream_payload["tool_choice"] = "none" if finalization_mode else "auto"
                         completion = (
                             agent_provider_stream_completion
                             if provider_id == "zai"
@@ -1467,7 +1468,32 @@ class Handler(BaseHTTPRequestHandler):
 
                         tool_calls = message.get("tool_calls")
                         if finalization_mode and isinstance(tool_calls, list) and tool_calls:
-                            raise RuntimeError("provider returned tool calls after explicit finalization disabled tools")
+                            finalization_retries += 1
+                            retry_event = {
+                                "closedcode": {
+                                    "type": "finalization_retry",
+                                    "requestID": request_id,
+                                    "status": "retry",
+                                    "retry": finalization_retries,
+                                    "maxRetries": AGENT_FINALIZATION_MAX_RETRIES,
+                                    "reason": "provider_returned_tool_calls_while_tool_choice_none",
+                                }
+                            }
+                            self.wfile.write(("data: " + json.dumps(retry_event, separators=(",", ":")) + "\n\n").encode("utf-8"))
+                            self.wfile.flush()
+                            if finalization_retries > AGENT_FINALIZATION_MAX_RETRIES:
+                                raise RuntimeError(
+                                    "provider repeatedly returned tool calls during explicit finalization despite tool_choice=none"
+                                )
+                            conversation.append({
+                                "role": "system",
+                                "content": (
+                                    "Finalization retry: tools are unavailable and no tool call will be executed. "
+                                    "Do not request tools. Produce the required final answer now from evidence already gathered, "
+                                    "including every required marker and preserved user constraint."
+                                ),
+                            })
+                            continue
                         if not (isinstance(tool_calls, list) and tool_calls):
                             queued_steering = active_stream_take_steering(request_id)
                             if queued_steering:
