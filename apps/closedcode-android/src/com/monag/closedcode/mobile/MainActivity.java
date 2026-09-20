@@ -79,6 +79,7 @@ public final class MainActivity extends Activity {
     private boolean promptRunning;
     private int streamGeneration;
     private int eventReconnectAttempt;
+    private boolean passthroughSendActive;
     private static final long PAGE_TRANSITION_MS = 240L;
     private static final PathInterpolator PAGE_TRANSITION_INTERPOLATOR =
             new PathInterpolator(0.22f, 1f, 0.36f, 1f);
@@ -739,6 +740,7 @@ public final class MainActivity extends Activity {
         final String requestId = activeProviderRequestId;
         activeProviderRequestId = null;
         providerStreamBody = null;
+        passthroughSendActive = false;
         if (activeAgentPermissionDialog != null && activeAgentPermissionDialog.isShowing()) {
             activeAgentPermissionDialog.dismiss();
         }
@@ -785,7 +787,7 @@ public final class MainActivity extends Activity {
     }
 
     private void loadMessages() {
-        if (currentSessionId == null) return;
+        if (currentSessionId == null || passthroughSendActive) return;
         final String expectedId = currentSessionId;
         api.messages(expectedId, directory, new ClosedCodeApi.Callback() {
             @Override public void success(String body) {
@@ -837,6 +839,9 @@ public final class MainActivity extends Activity {
     }
 
     private void renderMessages(String body) {
+        if (passthroughSendActive) {
+            return;
+        }
         clearTranscriptSelection(false);
         messageList.removeAllViews();
         try {
@@ -1069,6 +1074,10 @@ public final class MainActivity extends Activity {
         }
 
         composer.setText("");
+        final boolean passthroughPrompt = isPassthroughProvider(composerUi.providerId())
+                && composerUi.modelId() != null
+                && !composerUi.modelId().trim().isEmpty();
+        if (passthroughPrompt) passthroughSendActive = true;
         addMessageBubble("user", text);
         final String expectedId = currentSessionId;
         final String currentTitle = chatTitle.getText().toString();
@@ -1089,6 +1098,7 @@ public final class MainActivity extends Activity {
                 @Override public void failure(String message) {
                     if (!expectedId.equals(currentSessionId)) return;
                     if (backendDefaultTitle) {
+                        passthroughSendActive = false;
                         composer.setText(text);
                         toolStatus.setText("Error");
                         addMessageBubble("system", "Unable to prepare this legacy session: " + message);
@@ -1111,6 +1121,7 @@ public final class MainActivity extends Activity {
             return;
         }
 
+        passthroughSendActive = false;
         toolStatus.setText("Sending…");
         setPromptRunning(true);
         api.promptAsync(
@@ -1148,7 +1159,7 @@ public final class MainActivity extends Activity {
         String requestId = expectedId + "-" + System.nanoTime();
         activeProviderRequestId = requestId;
         providerStreamText.setLength(0);
-        providerStreamBody = addProviderStreamingBubble();
+        providerStreamBody = null;
         toolStatus.setText("Agent · " + providerId);
         setPromptRunning(true);
         api.streamAgentPrompt(
@@ -1162,8 +1173,11 @@ public final class MainActivity extends Activity {
                 new ClosedCodeApi.AgentStreamListener() {
                     @Override public void delta(String piece) {
                         if (!expectedId.equals(currentSessionId) || !requestId.equals(activeProviderRequestId)) return;
+                        if (providerStreamBody == null) {
+                            providerStreamBody = addProviderStreamingBubble();
+                        }
                         providerStreamText.append(piece);
-                        if (providerStreamBody != null) providerStreamBody.setText(providerStreamText.toString());
+                        providerStreamBody.setText(providerStreamText.toString());
                         messageScroll.post(() -> messageScroll.fullScroll(View.FOCUS_DOWN));
                     }
 
@@ -1187,6 +1201,7 @@ public final class MainActivity extends Activity {
                         if (!expectedId.equals(currentSessionId) || !requestId.equals(activeProviderRequestId)) return;
                         activeProviderRequestId = null;
                         providerStreamBody = null;
+                        passthroughSendActive = false;
                         setPromptRunning(false);
                         toolStatus.setText(cancelled ? "Stopped" : "Agent complete");
                     }
@@ -1195,6 +1210,7 @@ public final class MainActivity extends Activity {
                         if (!expectedId.equals(currentSessionId) || !requestId.equals(activeProviderRequestId)) return;
                         activeProviderRequestId = null;
                         providerStreamBody = null;
+                        passthroughSendActive = false;
                         setPromptRunning(false);
                         toolStatus.setText("Agent unavailable");
                         addMessageBubble("system", "Agent failed: " + message);
