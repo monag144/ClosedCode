@@ -190,6 +190,7 @@ def main() -> int:
     cancel_posted = False
     errors = []
     terminal = None
+    token_usage = None
     final_parts = []
 
     status_lock = threading.Lock()
@@ -219,6 +220,7 @@ def main() -> int:
         "cancelPosted": False,
         "errors": [],
         "terminal": None,
+        "tokenUsage": None,
     }
 
     def status_patch(**values):
@@ -364,7 +366,8 @@ def main() -> int:
                     status_patch(errors=list(errors))
                 if cc.get("complete"):
                     terminal = cc
-                    status_patch(terminal=terminal)
+                    token_usage = cc.get("tokenUsage") if isinstance(cc.get("tokenUsage"), dict) else None
+                    status_patch(terminal=terminal, tokenUsage=token_usage)
                     break
                 continue
 
@@ -417,6 +420,7 @@ def main() -> int:
         "cancelAt": args.cancel_at,
         "cancelPosted": cancel_posted,
         "terminal": terminal,
+        "tokenUsage": token_usage,
         "errors": errors,
         "finalChars": len(final_text),
         "finalSha256": hashlib.sha256(final_text.encode()).hexdigest(),
@@ -438,11 +442,21 @@ def main() -> int:
         cancelPosted=cancel_posted,
         errors=list(errors),
         terminal=terminal,
+        tokenUsage=token_usage,
         finalChars=len(final_text),
         finalSha256=hashlib.sha256(final_text.encode()).hexdigest(),
     )
     emit_summary(summary, args.output)
     print("MARATHON_ACCEPTANCE=" + ("GREEN" if accepted else "RED"))
+    def usage_text(key):
+        value = token_usage.get(key) if isinstance(token_usage, dict) else None
+        return str(value) if isinstance(value, int) and not isinstance(value, bool) else "UNAVAILABLE"
+    print("TOKENS_USED_PROMPT=" + usage_text("promptTokens"))
+    print("TOKENS_USED_COMPLETION=" + usage_text("completionTokens"))
+    print("TOKENS_USED_TOTAL=" + usage_text("totalTokens"))
+    print("TOKEN_USAGE_PROVIDER_ROUNDS=" + usage_text("providerRounds"))
+    print("TOKEN_USAGE_REPORTED_ROUNDS=" + usage_text("reportedRounds"))
+    print("TOKEN_USAGE_EXACT=" + ("YES" if isinstance(token_usage, dict) and token_usage.get("exact") is True else "NO"))
     if status_server is not None:
         status_done.wait()
     return 0 if accepted else 50

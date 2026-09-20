@@ -24,7 +24,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.8.13"
+VERSION = "0.8.14"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -244,6 +244,25 @@ def wait_with_cancel(request_id: str, seconds: float) -> bool:
     return not active_stream_cancelled(request_id)
 
 
+def agent_provider_token_usage(response: dict):
+    if not isinstance(response, dict) or not isinstance(response.get("usage"), dict):
+        return None
+    usage = response["usage"]
+    def read(*keys):
+        for key in keys:
+            value = usage.get(key)
+            if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                return value
+        return None
+    prompt = read("prompt_tokens", "input_tokens", "promptTokens", "inputTokens")
+    completion = read("completion_tokens", "output_tokens", "completionTokens", "outputTokens")
+    total = read("total_tokens", "totalTokens")
+    if total is None and prompt is not None and completion is not None:
+        total = prompt + completion
+    if prompt is None and completion is None and total is None:
+        return None
+    return {"promptTokens": prompt, "completionTokens": completion, "totalTokens": total}
+
 def agent_provider_completion(provider_id: str, upstream_url: str, key: str, payload: dict, request_id: str) -> dict:
     encoded = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     last_error = "provider request failed"
@@ -311,6 +330,7 @@ def agent_provider_stream_completion(provider_id: str, upstream_url: str, key: s
             reasoning_parts = []
             tool_slots = {}
             finish_reason = None
+            usage = None
             with upstream:
                 status = getattr(upstream, "status", 200)
                 retry_headers = getattr(upstream, "headers", None)
@@ -334,6 +354,8 @@ def agent_provider_stream_completion(provider_id: str, upstream_url: str, key: s
                                 break
                             continue
                         event = json.loads(data)
+                        if isinstance(event, dict) and isinstance(event.get("usage"), dict):
+                            usage = event["usage"]
                         choices = event.get("choices") if isinstance(event, dict) else None
                         choice = choices[0] if isinstance(choices, list) and choices else {}
                         if not isinstance(choice, dict):
@@ -386,7 +408,10 @@ def agent_provider_stream_completion(provider_id: str, upstream_url: str, key: s
                                 slot["id"] = "closedcode-stream-call-" + str(index)
                             tool_calls.append(slot)
                         message["tool_calls"] = tool_calls
-                    return {"choices": [{"index": 0, "message": message, "finish_reason": finish_reason}]}
+                    result = {"choices": [{"index": 0, "message": message, "finish_reason": finish_reason}]}
+                    if usage is not None:
+                        result["usage"] = usage
+                    return result
             active_stream_set_upstream(request_id, None)
         except urlerror.HTTPError as exc:
             active_stream_set_upstream(request_id, None)
@@ -1371,6 +1396,14 @@ class Handler(BaseHTTPRequestHandler):
                 successful_tool_actions = 0
                 finalization_mode = False
                 finalization_retries = 0
+                provider_rounds = 0
+                token_reported_rounds = 0
+                token_prompt_tokens = 0
+                token_completion_tokens = 0
+                token_total_tokens = 0
+                token_prompt_complete = True
+                token_completion_complete = True
+                token_total_complete = True
 
                 try:
                     for round_index in range(agent_emergency_round_limit()):
@@ -1456,6 +1489,23 @@ class Handler(BaseHTTPRequestHandler):
                         )
                         if provider_id == "zai":
                             last_zai_provider_round_finished_at = time.monotonic()
+                        provider_rounds += 1
+                        round_usage = agent_provider_token_usage(response)
+                        if round_usage is None:
+                            token_prompt_complete = False
+                            token_completion_complete = False
+                            token_total_complete = False
+                        else:
+                            token_reported_rounds += 1
+                            value = round_usage.get("promptTokens")
+                            if value is None: token_prompt_complete = False
+                            else: token_prompt_tokens += value
+                            value = round_usage.get("completionTokens")
+                            if value is None: token_completion_complete = False
+                            else: token_completion_tokens += value
+                            value = round_usage.get("totalTokens")
+                            if value is None: token_total_complete = False
+                            else: token_total_tokens += value
 
                         if active_stream_cancelled(request_id):
                             cancelled = True
@@ -1689,6 +1739,15 @@ class Handler(BaseHTTPRequestHandler):
                                 "complete": True,
                                 "termination": termination_reason,
                                 "rounds": completed_rounds,
+                                "tokenUsage": {
+                                    "promptTokens": token_prompt_tokens if token_prompt_complete and provider_rounds else None,
+                                    "completionTokens": token_completion_tokens if token_completion_complete and provider_rounds else None,
+                                    "totalTokens": token_total_tokens if token_total_complete and provider_rounds else None,
+                                    "providerRounds": provider_rounds,
+                                    "reportedRounds": token_reported_rounds,
+                                    "unreportedRounds": provider_rounds - token_reported_rounds,
+                                    "exact": bool(provider_rounds and token_total_complete),
+                                },
                             }
                         }
                         self.wfile.write(("data: " + json.dumps(marker, separators=(",", ":")) + "\n\n").encode("utf-8"))
