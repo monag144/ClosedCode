@@ -400,6 +400,8 @@
                         android:focusable="false" />
                 </LinearLayout>
 
+                <LinearLayout android:id="@+id/fullAccessRow" android:layout_width="match_parent" android:layout_height="78dp" android:clickable="true" android:focusable="true" android:gravity="center_vertical" android:orientation="horizontal"><LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical"><TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="FULL ACCESS / Danger" android:textColor="@color/cc_bad" android:textSize="15sp" android:textStyle="bold"/><TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Device-wide filesystem + shell access wherever Termux is permitted. No approval prompts. Off by default." android:textColor="@color/cc_muted" android:textSize="11sp"/></LinearLayout><Switch android:id="@+id/fullAccessSwitch" android:layout_width="wrap_content" android:layout_height="match_parent" android:clickable="false" android:focusable="false"/></LinearLayout>
+
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"

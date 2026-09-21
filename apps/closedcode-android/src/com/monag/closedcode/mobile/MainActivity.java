@@ -70,6 +70,7 @@ public final class MainActivity extends Activity {
     private Switch biometricSwitch;
     private Switch hidePreviewSwitch;
     private Switch yoloSwitch;
+    private Switch fullAccessSwitch;
     private Switch permissionNotifySwitch;
     private Switch questionNotifySwitch;
     private Switch completedNotifySwitch;
@@ -249,6 +250,7 @@ public final class MainActivity extends Activity {
         biometricSwitch = findViewById(R.id.biometricSwitch);
         hidePreviewSwitch = findViewById(R.id.hidePreviewSwitch);
         yoloSwitch = findViewById(R.id.yoloSwitch);
+        fullAccessSwitch = findViewById(R.id.fullAccessSwitch);
         permissionNotifySwitch = findViewById(R.id.permissionNotifySwitch);
         questionNotifySwitch = findViewById(R.id.questionNotifySwitch);
         completedNotifySwitch = findViewById(R.id.completedNotifySwitch);
@@ -285,7 +287,7 @@ public final class MainActivity extends Activity {
         applyThemeSpecificControls();
         bindToggle(R.id.biometricRow, biometricSwitch, "requireBiometrics", false, false);
         bindToggle(R.id.hidePreviewRow, hidePreviewSwitch, "hideAppPreview", false, true);
-        bindToggle(R.id.yoloRow, yoloSwitch, "yoloAutonomy", false, false);
+        bindAutonomyControls();
         bindToggle(R.id.permissionNotifyRow, permissionNotifySwitch, "notifyPermissions", true, false);
         bindToggle(R.id.questionNotifyRow, questionNotifySwitch, "notifyQuestions", true, false);
         bindToggle(R.id.completedNotifyRow, completedNotifySwitch, "notifyCompleted", true, false);
@@ -315,6 +317,9 @@ public final class MainActivity extends Activity {
         });
         findViewById(rowId).setOnClickListener(v -> toggle.setChecked(!toggle.isChecked()));
     }
+
+    private void syncAutonomy() { boolean f=prefs.getBoolean("fullAccessAutonomy",false); if(f&&prefs.getBoolean("yoloAutonomy",false)) prefs.edit().putBoolean("yoloAutonomy",false).apply(); yoloSwitch.setChecked(!f&&prefs.getBoolean("yoloAutonomy",false)); fullAccessSwitch.setChecked(f); }
+    private void bindAutonomyControls() { syncAutonomy(); findViewById(R.id.yoloRow).setOnClickListener(v->{ boolean on=!prefs.getBoolean("yoloAutonomy",false); android.content.SharedPreferences.Editor e=prefs.edit().putBoolean("yoloAutonomy",on); if(on)e.putBoolean("fullAccessAutonomy",false); e.apply(); syncAutonomy(); }); findViewById(R.id.fullAccessRow).setOnClickListener(v->{ if(prefs.getBoolean("fullAccessAutonomy",false)){prefs.edit().putBoolean("fullAccessAutonomy",false).apply();syncAutonomy();return;} new AlertDialog.Builder(this).setTitle("Enable Full Access?").setMessage("DANGER: removes ClosedCode's workspace boundary. The agent may read, write, delete, move, and run shell commands anywhere Termux is allowed by Android/Linux. No tool approval prompts are shown. OS permissions still apply.").setPositiveButton("Enable Full Access",(d,w)->{prefs.edit().putBoolean("fullAccessAutonomy",true).putBoolean("yoloAutonomy",false).apply();syncAutonomy();}).setNegativeButton("Cancel",null).show(); }); }
 
     private void setSecurePreview(boolean enabled) {
         if (enabled) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
@@ -1263,7 +1268,7 @@ public final class MainActivity extends Activity {
                 text,
                 providerId,
                 modelId,
-                prefs.getBoolean("yoloAutonomy", false) ? "yolo" : "ask",
+                prefs.getBoolean("fullAccessAutonomy", false) ? "full" : (prefs.getBoolean("yoloAutonomy", false) ? "yolo" : "ask"),
                 requestId,
                 new ClosedCodeApi.AgentStreamListener() {
                     @Override public void delta(String piece) {

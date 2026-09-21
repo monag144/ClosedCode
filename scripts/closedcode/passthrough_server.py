@@ -24,7 +24,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.8.18"
+VERSION = "0.8.19"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -582,23 +582,23 @@ def workspace_root(value: str) -> Path:
     return root
 
 
-def workspace_path(root_value: str, path_value: str, allow_missing: bool = False):
+def workspace_path(root_value: str, path_value: str, allow_missing: bool = False, full_access: bool = False):
     root = workspace_root(root_value)
     if not isinstance(path_value, str) or not path_value or len(path_value) > 4096:
         raise ValueError("path is required")
     raw = Path(path_value).expanduser()
     target = (raw if raw.is_absolute() else root / raw).resolve(strict=False)
-    try:
-        target.relative_to(root)
-    except ValueError:
-        raise ValueError("path escapes workspace")
-    if not allow_missing and not target.exists():
-        raise FileNotFoundError("path does not exist")
+    if not full_access:
+        try: target.relative_to(root)
+        except ValueError: raise ValueError("path escapes workspace")
+    if not allow_missing and not target.exists(): raise FileNotFoundError("path does not exist")
     return root, target
 
 
 def workspace_rel(root: Path, target: Path) -> str:
-    return "." if target == root else target.relative_to(root).as_posix()
+    if target == root: return "."
+    try: return target.relative_to(root).as_posix()
+    except ValueError: return str(target)
 
 
 AGENT_EMERGENCY_MAX_ROUNDS_DEFAULT = 4096
@@ -903,12 +903,12 @@ AGENT_TOOLS = [
 ]
 
 
-def agent_tool_result(root_value: str, name: str, arguments: dict) -> dict:
+def agent_tool_result(root_value: str, name: str, arguments: dict, full_access: bool = False) -> dict:
     if not isinstance(arguments, dict):
         raise ValueError("tool arguments must be an object")
 
     if name == "workspace_list":
-        root, target = workspace_path(root_value, arguments.get("path", "."))
+        root, target = workspace_path(root_value, arguments.get("path", "."), full_access=full_access)
         if not target.is_dir():
             raise ValueError("path is not a directory")
         items = []
@@ -924,7 +924,7 @@ def agent_tool_result(root_value: str, name: str, arguments: dict) -> dict:
         return {"ok": True, "path": workspace_rel(root, target), "items": items[:500]}
 
     if name == "workspace_read":
-        root, target = workspace_path(root_value, arguments.get("path"))
+        root, target = workspace_path(root_value, arguments.get("path"), full_access=full_access)
         if not target.is_file():
             raise ValueError("path is not a file")
         size = target.stat().st_size
@@ -982,7 +982,7 @@ def agent_tool_result(root_value: str, name: str, arguments: dict) -> dict:
         encoded = content.encode("utf-8")
         if len(encoded) > MAX_FILE_BYTES:
             raise ValueError("file exceeds write limit")
-        root, target = workspace_path(root_value, arguments.get("path"), allow_missing=True)
+        root, target = workspace_path(root_value, arguments.get("path"), allow_missing=True, full_access=full_access)
         if target.exists() and not target.is_file():
             raise ValueError("path is not a file")
         if not target.parent.is_dir():
@@ -1002,7 +1002,7 @@ def agent_tool_result(root_value: str, name: str, arguments: dict) -> dict:
             raise ValueError("oldText must be non-empty text")
         if not isinstance(new_text, str):
             raise ValueError("newText must be text")
-        root, target = workspace_path(root_value, arguments.get("path"))
+        root, target = workspace_path(root_value, arguments.get("path"), full_access=full_access)
         if not target.is_file():
             raise ValueError("path is not a file")
         content = target.read_text(encoding="utf-8")
@@ -1025,8 +1025,8 @@ def agent_tool_result(root_value: str, name: str, arguments: dict) -> dict:
         return {"ok": True, "path": workspace_rel(root, target), "replacements": occurrences if replace_all else 1, "bytes": len(encoded)}
 
     if name == "workspace_move":
-        root, source = workspace_path(root_value, arguments.get("source"))
-        _, destination = workspace_path(root_value, arguments.get("destination"), allow_missing=True)
+        root, source = workspace_path(root_value, arguments.get("source"), full_access=full_access)
+        _, destination = workspace_path(root_value, arguments.get("destination"), allow_missing=True, full_access=full_access)
         if source == root:
             raise ValueError("cannot move workspace root")
         if destination.exists():
@@ -1037,7 +1037,7 @@ def agent_tool_result(root_value: str, name: str, arguments: dict) -> dict:
         return {"ok": True, "source": workspace_rel(root, source), "destination": workspace_rel(root, destination)}
 
     if name == "workspace_delete":
-        root, target = workspace_path(root_value, arguments.get("path"))
+        root, target = workspace_path(root_value, arguments.get("path"), full_access=full_access)
         if target == root:
             raise ValueError("cannot delete workspace root")
         recursive = bool(arguments.get("recursive", False))
@@ -1077,7 +1077,7 @@ def agent_tool_result(root_value: str, name: str, arguments: dict) -> dict:
         return {"ok": True, "output": output, "truncated": len(completed.stdout) > MAX_COMMAND_OUTPUT_BYTES}
 
     if name == "workspace_mkdir":
-        root, target = workspace_path(root_value, arguments.get("path"), allow_missing=True)
+        root, target = workspace_path(root_value, arguments.get("path"), allow_missing=True, full_access=full_access)
         if target.exists():
             raise ValueError("path already exists")
         target.mkdir(parents=bool(arguments.get("parents", False)), mode=0o700)
@@ -1093,7 +1093,7 @@ def agent_tool_result(root_value: str, name: str, arguments: dict) -> dict:
         if not isinstance(timeout_seconds, int):
             raise ValueError("timeoutSeconds must be an integer")
         timeout_seconds = max(1, min(timeout_seconds, MAX_COMMAND_TIMEOUT_SECONDS))
-        root, cwd = workspace_path(root_value, arguments.get("cwd", "."))
+        root, cwd = workspace_path(root_value, arguments.get("cwd", "."), full_access=full_access)
         if not cwd.is_dir():
             raise ValueError("cwd is not a directory")
         started = time.monotonic()
@@ -1378,8 +1378,8 @@ class Handler(BaseHTTPRequestHandler):
                 autonomy = payload.get("autonomy", "ask")
                 messages = payload.get("messages")
                 finalize_after_tools = payload.get("finalizeAfterTools")
-                if autonomy not in {"ask", "yolo"}:
-                    raise ValueError("autonomy must be ask or yolo")
+                if autonomy not in {"ask", "yolo", "full"}:
+                    raise ValueError("autonomy must be ask, yolo, or full")
                 if provider_id not in PROVIDERS:
                     raise ValueError("providerID must be nvidia or zai")
                 if not isinstance(model, str) or not model.strip():
@@ -1409,12 +1409,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.end_headers()
 
                 autonomy_note = (
-                    "Autonomy mode is YOLO/AUTO-APPROVE: routine workspace-scoped mutation tools run without prompts, "
-                    "but shell commands remain approval-gated. Containment and task scope still apply. This is not Full Access. "
-                    "Continue through ordinary inspect/edit/build/test/diagnose/repair loops independently within those limits. "
-                    if autonomy == "yolo"
-                    else
-                    "Autonomy mode is ASK/GUARDED: mutating tools may require explicit user approval. "
+                    "Autonomy mode is FULL ACCESS / DANGER: ClosedCode workspace containment is disabled. Absolute filesystem paths may reach anything Termux can legally access. Filesystem mutation tools and shell run without approval prompts. Android/Linux permissions, SELinux, mounts, and root status remain hard limits. " if autonomy == "full" else
+                    "Autonomy mode is YOLO/AUTO-APPROVE: routine workspace-scoped mutation tools run without prompts, but shell commands remain approval-gated. Containment still applies. This is not Full Access. " if autonomy == "yolo" else
+                    "Autonomy mode is ASK/GUARDED: filesystem actions remain workspace-contained and mutating tools may require explicit user approval. "
                 )
                 system = {
                     "role": "system",
@@ -1630,7 +1627,7 @@ class Handler(BaseHTTPRequestHandler):
                                     name = "unknown"
                                 try:
                                     arguments = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
-                                    if name in AGENT_APPROVAL_TOOLS and not (autonomy == "yolo" and name in YOLO_AUTO_APPROVAL_TOOLS):
+                                    if name in AGENT_APPROVAL_TOOLS and not (autonomy == "full" or (autonomy == "yolo" and name in YOLO_AUTO_APPROVAL_TOOLS)):
                                         permission_id = agent_permission_id(request_id, call_id, round_index)
                                         agent_permission_register(permission_id, request_id)
                                         try:
@@ -1669,7 +1666,7 @@ class Handler(BaseHTTPRequestHandler):
                                                 ("data: " + json.dumps(tool_event, separators=(",", ":")) + "\n\n").encode("utf-8")
                                             )
                                             self.wfile.flush()
-                                            result = agent_tool_result(root_value, name, arguments)
+                                            result = agent_tool_result(root_value, name, arguments, full_access=autonomy == "full")
                                     else:
                                         tool_event = {
                                             "closedcode": {
@@ -1684,7 +1681,7 @@ class Handler(BaseHTTPRequestHandler):
                                             ("data: " + json.dumps(tool_event, separators=(",", ":")) + "\n\n").encode("utf-8")
                                         )
                                         self.wfile.flush()
-                                        result = agent_tool_result(root_value, name, arguments)
+                                        result = agent_tool_result(root_value, name, arguments, full_access=autonomy == "full")
                                 except Exception as exc:
                                     result = {"ok": False, "error": str(exc)}
                                 if result.get("ok"):
