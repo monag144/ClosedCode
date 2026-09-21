@@ -462,6 +462,59 @@
                 </LinearLayout>
 
                 <LinearLayout
+                    android:id="@+id/completionSoundRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="72dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Completion sound"
+                            android:textColor="@color/cc_text" />
+                        <TextView
+                            android:id="@+id/completionSoundLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="Sound: Default notification"
+                            android:textColor="@color/cc_muted"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+                    <TextView
+                        android:id="@+id/completionSoundChoose"
+                        android:layout_width="wrap_content"
+                        android:layout_height="44dp"
+                        android:gravity="center"
+                        android:paddingLeft="8dp"
+                        android:paddingRight="8dp"
+                        android:text="Choose"
+                        android:textColor="@color/cc_accent" />
+                    <TextView
+                        android:id="@+id/completionSoundTest"
+                        android:layout_width="wrap_content"
+                        android:layout_height="44dp"
+                        android:gravity="center"
+                        android:paddingLeft="8dp"
+                        android:paddingRight="8dp"
+                        android:text="Test"
+                        android:textColor="@color/cc_accent" />
+                    <TextView
+                        android:id="@+id/completionSoundToggle"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:gravity="center"
+                        android:text="🔊"
+                        android:textColor="@color/cc_text"
+                        android:textSize="22sp" />
+                </LinearLayout>
+
+                <LinearLayout
                     android:id="@+id/errorNotifyRow"
                     android:layout_width="match_parent"
                     android:layout_height="54dp"

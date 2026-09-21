@@ -74,6 +74,10 @@ public final class MainActivity extends Activity {
     private Switch questionNotifySwitch;
     private Switch completedNotifySwitch;
     private Switch errorNotifySwitch;
+    private TextView completionSoundToggle;
+    private TextView completionSoundChoose;
+    private TextView completionSoundTest;
+    private TextView completionSoundLabel;
     private boolean interactionDialogOpen;
     private boolean pageTransitionRunning;
     private boolean promptRunning;
@@ -83,7 +87,9 @@ public final class MainActivity extends Activity {
     private boolean appVisible;
     private boolean providerRunHadError;
     private String lastCompletionAlertRequestId;
+    private String lastErrorAlertRequestId;
     private static final String COMPLETION_CHANNEL_ID = "closedcode_agent_completion";
+    private static final String ERROR_CHANNEL_ID = "closedcode_agent_error";
     private static final long PAGE_TRANSITION_MS = 240L;
     private static final PathInterpolator PAGE_TRANSITION_INTERPOLATOR =
             new PathInterpolator(0.22f, 1f, 0.36f, 1f);
@@ -108,6 +114,7 @@ public final class MainActivity extends Activity {
     private final List<View> selectedTranscriptBlocks = new ArrayList<>();
     private boolean transcriptSelectionMode;
     private static final int VOICE_REQUEST_CODE = 413;
+    private static final int SOUND_REQUEST_CODE = 414;
     private final List<ProviderChoice> providerChoices = new ArrayList<>();
 
     private static final class ModelChoice {
@@ -161,6 +168,7 @@ public final class MainActivity extends Activity {
         connectionUrl.setText(url);
         ensureCompletionChannel();
         requestCompletionPermission();
+        updateCompletionSoundUi();
         showPage("sessions");
         handleCompletionIntent(getIntent());
         refreshEverything();
@@ -208,6 +216,10 @@ public final class MainActivity extends Activity {
         questionNotifySwitch = findViewById(R.id.questionNotifySwitch);
         completedNotifySwitch = findViewById(R.id.completedNotifySwitch);
         errorNotifySwitch = findViewById(R.id.errorNotifySwitch);
+        completionSoundToggle = findViewById(R.id.completionSoundToggle);
+        completionSoundChoose = findViewById(R.id.completionSoundChoose);
+        completionSoundTest = findViewById(R.id.completionSoundTest);
+        completionSoundLabel = findViewById(R.id.completionSoundLabel);
     }
 
     private void bindActions() {
@@ -237,6 +249,14 @@ public final class MainActivity extends Activity {
         bindToggle(R.id.questionNotifyRow, questionNotifySwitch, "notifyQuestions", true, false);
         bindToggle(R.id.completedNotifyRow, completedNotifySwitch, "notifyCompleted", true, false);
         bindToggle(R.id.errorNotifyRow, errorNotifySwitch, "notifyErrors", true, false);
+        completionSoundToggle.setOnClickListener(v -> {
+            boolean enabled = !prefs.getBoolean("completionSoundEnabled", true);
+            prefs.edit().putBoolean("completionSoundEnabled", enabled).apply();
+            updateCompletionSoundUi();
+            if (enabled) playCompletionSound(true);
+        });
+        completionSoundChoose.setOnClickListener(v -> chooseCompletionSound());
+        completionSoundTest.setOnClickListener(v -> playCompletionSound(true));
         composer.setImeOptions(EditorInfo.IME_ACTION_SEND);
         composer.setOnEditorActionListener((v, actionId, event) -> {
             if (actionId == EditorInfo.IME_ACTION_SEND) { sendPrompt(); return true; }
@@ -250,7 +270,7 @@ public final class MainActivity extends Activity {
         toggle.setOnCheckedChangeListener((button, checked) -> {
             prefs.edit().putBoolean(key, checked).apply();
             if (securePreview) setSecurePreview(checked);
-            if ("notifyCompleted".equals(key) && checked) requestCompletionPermission();
+            if (("notifyCompleted".equals(key) || "notifyErrors".equals(key)) && checked) requestCompletionPermission();
         });
         findViewById(rowId).setOnClickListener(v -> toggle.setChecked(!toggle.isChecked()));
     }
@@ -520,6 +540,17 @@ public final class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == SOUND_REQUEST_CODE) {
+            if (resultCode == RESULT_OK && data != null) {
+                android.net.Uri picked = data.getParcelableExtra(android.media.RingtoneManager.EXTRA_RINGTONE_PICKED_URI);
+                if (picked != null) {
+                    prefs.edit().putString("completionSoundUri", picked.toString()).apply();
+                    updateCompletionSoundUi();
+                    playCompletionSound(true);
+                }
+            }
+            return;
+        }
         if (requestCode != VOICE_REQUEST_CODE || resultCode != RESULT_OK || data == null) return;
         ArrayList<String> results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
         if (results == null || results.isEmpty()) return;
@@ -1218,6 +1249,7 @@ public final class MainActivity extends Activity {
                         providerRunHadError = true;
                         toolStatus.setText("Agent error");
                         addMessageBubble("system", "Agent: " + message);
+                        signalError(requestId, expectedId, chatTitle.getText().toString(), message);
                     }
 
                     @Override public void complete(boolean cancelled) {
@@ -1240,6 +1272,7 @@ public final class MainActivity extends Activity {
                         setPromptRunning(false);
                         toolStatus.setText("Agent unavailable");
                         addMessageBubble("system", "Agent failed: " + message);
+                        signalError(requestId, expectedId, chatTitle.getText().toString(), message);
                     }
                 });
     }
@@ -1894,16 +1927,62 @@ public final class MainActivity extends Activity {
         Toast.makeText(this, value, Toast.LENGTH_LONG).show();
     }
 
-    private void ensureCompletionChannel(){ android.app.NotificationManager n=(android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE); if(n==null)return; android.app.NotificationChannel c=new android.app.NotificationChannel(COMPLETION_CHANNEL_ID,"Agent completions",android.app.NotificationManager.IMPORTANCE_DEFAULT); c.setSound(android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION),null); n.createNotificationChannel(c); }
-    private void requestCompletionPermission(){ if(android.os.Build.VERSION.SDK_INT>=33 && prefs!=null && prefs.getBoolean("notifyCompleted",true) && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED) requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},914); }
+    private android.net.Uri completionSoundUri(){
+        String saved=prefs==null?null:prefs.getString("completionSoundUri",null);
+        if(saved!=null&&!saved.isEmpty()) try{return android.net.Uri.parse(saved);}catch(Exception ignored){}
+        return android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION);
+    }
+    private void updateCompletionSoundUi(){
+        if(completionSoundToggle==null)return;
+        boolean enabled=prefs.getBoolean("completionSoundEnabled",true);
+        completionSoundToggle.setText(enabled?"🔊":"🔇");
+        completionSoundToggle.setContentDescription(enabled?"Mute completion sound":"Unmute completion sound");
+        try{ android.media.Ringtone q=android.media.RingtoneManager.getRingtone(this,completionSoundUri()); String title=q==null?"Default notification":q.getTitle(this); completionSoundLabel.setText("Sound: "+title); }catch(Exception e){ completionSoundLabel.setText("Sound: Default notification"); }
+    }
+    private void chooseCompletionSound(){
+        Intent i=new Intent(android.media.RingtoneManager.ACTION_RINGTONE_PICKER);
+        i.putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TYPE,android.media.RingtoneManager.TYPE_NOTIFICATION);
+        i.putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT,true);
+        i.putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT,false);
+        i.putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,completionSoundUri());
+        startActivityForResult(i,SOUND_REQUEST_CODE);
+    }
+    private void playCompletionSound(boolean force){
+        if(!force && !prefs.getBoolean("completionSoundEnabled",true))return;
+        try{ android.media.Ringtone q=android.media.RingtoneManager.getRingtone(this,completionSoundUri()); if(q!=null)q.play(); else toast("Completion sound unavailable"); }catch(Exception e){ toast("Completion sound failed: "+e.getMessage()); }
+    }
+    private void ensureCompletionChannel(){
+        android.app.NotificationManager n=(android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE); if(n==null)return;
+        android.app.NotificationChannel c=new android.app.NotificationChannel(COMPLETION_CHANNEL_ID,"Agent completions",android.app.NotificationManager.IMPORTANCE_DEFAULT);
+        c.setDescription("Successful ClosedCode agent completions");
+        c.setSound(android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION),null); n.createNotificationChannel(c);
+        android.app.NotificationChannel e=new android.app.NotificationChannel(ERROR_CHANNEL_ID,"Agent errors",android.app.NotificationManager.IMPORTANCE_DEFAULT);
+        e.setDescription("ClosedCode agent failures and errors");
+        e.setSound(android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION),null); n.createNotificationChannel(e);
+    }
+    private void requestCompletionPermission(){
+        if(android.os.Build.VERSION.SDK_INT>=33 && prefs!=null && (prefs.getBoolean("notifyCompleted",true)||prefs.getBoolean("notifyErrors",true)) && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED) requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},914);
+    }
     private void signalCompletion(String rid,String sid,String title,String provider,String model){
-        if(prefs==null||!prefs.getBoolean("notifyCompleted",true)||rid.equals(lastCompletionAlertRequestId))return; lastCompletionAlertRequestId=rid;
-        if(appVisible){ try{ android.media.Ringtone q=android.media.RingtoneManager.getRingtone(this,android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)); if(q!=null)q.play(); }catch(Exception ignored){} return; }
+        if(prefs==null||rid==null||rid.equals(lastCompletionAlertRequestId))return; lastCompletionAlertRequestId=rid;
+        if(appVisible){ playCompletionSound(false); return; }
+        if(!prefs.getBoolean("notifyCompleted",true))return;
         if(android.os.Build.VERSION.SDK_INT>=33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)return;
+        int notificationId=("complete|"+sid+"|"+rid).hashCode();
         Intent i=new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("cc.sid",sid).putExtra("cc.title",title);
-        android.app.PendingIntent p=android.app.PendingIntent.getActivity(this,sid.hashCode(),i,android.app.PendingIntent.FLAG_UPDATE_CURRENT|android.app.PendingIntent.FLAG_IMMUTABLE);
+        android.app.PendingIntent p=android.app.PendingIntent.getActivity(this,notificationId,i,android.app.PendingIntent.FLAG_UPDATE_CURRENT|android.app.PendingIntent.FLAG_IMMUTABLE);
         android.app.Notification n=new android.app.Notification.Builder(this,COMPLETION_CHANNEL_ID).setSmallIcon(android.R.drawable.stat_sys_download_done).setContentTitle("ClosedCode · Agent complete").setContentText((title==null||title.isEmpty()?"Session complete":title)+" · "+provider+" · "+model).setContentIntent(p).setAutoCancel(true).build();
-        android.app.NotificationManager nm=(android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE); if(nm!=null)nm.notify(sid.hashCode(),n);
+        android.app.NotificationManager nm=(android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE); if(nm!=null)nm.notify(notificationId,n);
+    }
+    private void signalError(String rid,String sid,String title,String message){
+        if(prefs==null||rid==null||rid.equals(lastErrorAlertRequestId)||!prefs.getBoolean("notifyErrors",true))return; lastErrorAlertRequestId=rid;
+        if(android.os.Build.VERSION.SDK_INT>=33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)return;
+        int notificationId=("error|"+sid+"|"+rid).hashCode();
+        Intent i=new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("cc.sid",sid).putExtra("cc.title",title);
+        android.app.PendingIntent p=android.app.PendingIntent.getActivity(this,notificationId,i,android.app.PendingIntent.FLAG_UPDATE_CURRENT|android.app.PendingIntent.FLAG_IMMUTABLE);
+        String detail=message==null||message.isEmpty()?"Agent task failed":trim(message,180);
+        android.app.Notification n=new android.app.Notification.Builder(this,ERROR_CHANNEL_ID).setSmallIcon(android.R.drawable.stat_notify_error).setContentTitle("ClosedCode · Agent error").setContentText(detail).setContentIntent(p).setAutoCancel(true).build();
+        android.app.NotificationManager nm=(android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE); if(nm!=null)nm.notify(notificationId,n);
     }
     private void handleCompletionIntent(Intent i){ if(i==null)return; String sid=i.getStringExtra("cc.sid"); if(sid==null||sid.isEmpty()||sid.equals(currentSessionId))return; String t=i.getStringExtra("cc.title"); openSession(sid,t==null?"ClosedCode session":t); }
     @Override protected void onStart(){super.onStart();appVisible=true;}
