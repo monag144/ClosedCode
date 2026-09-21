@@ -109,6 +109,11 @@ public final class MainActivity extends Activity {
     private String selectedVariant;
     private String activeProviderRequestId;
     private AlertDialog activeAgentPermissionDialog;
+    private String pendingAgentPermissionExpectedId;
+    private String pendingAgentPermissionRequestId;
+    private String pendingAgentPermissionId;
+    private String pendingAgentPermissionTool;
+    private String pendingAgentPermissionArguments;
     private final java.util.HashSet<String> approveAllAgentRequests = new java.util.HashSet<>();
     private TextView providerStreamBody;
     private final StringBuilder providerStreamText = new StringBuilder();
@@ -681,10 +686,14 @@ public final class MainActivity extends Activity {
         row.addView(sub);
         if (!id.isEmpty()) {
             TextView delete = simpleText("Delete session", 12, R.color.cc_bad);
-            delete.setGravity(Gravity.END);
-            delete.setPadding(dp(8), dp(10), 0, dp(2));
+            delete.setGravity(Gravity.CENTER);
+            delete.setPadding(dp(12), dp(10), dp(12), dp(8));
             delete.setOnClickListener(v -> confirmDeleteSession(id, title));
-            row.addView(delete);
+            LinearLayout.LayoutParams deleteLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            deleteLp.gravity = Gravity.END;
+            row.addView(delete, deleteLp);
             row.setOnClickListener(v -> openSession(id, title));
         }
         sessionList.addView(row, matchWrapMargins(0, 6, 0, 6));
@@ -808,6 +817,7 @@ public final class MainActivity extends Activity {
             activeAgentPermissionDialog.dismiss();
         }
         activeAgentPermissionDialog = null;
+        pendingAgentPermissionExpectedId=null; pendingAgentPermissionRequestId=null; pendingAgentPermissionId=null; pendingAgentPermissionTool=null; pendingAgentPermissionArguments=null;
         interactionDialogOpen = false;
         if (requestId == null) return;
         api.cancelProviderRequest(requestId, new ClosedCodeApi.Callback() {
@@ -1317,21 +1327,65 @@ public final class MainActivity extends Activity {
         prefs.edit().putStringSet("agentAlwaysAllowedActions", updated).apply();
     }
 
+    private void queueAgentPermission(String expectedId,String requestId,String permissionId,String tool,String arguments) {
+        pendingAgentPermissionExpectedId=expectedId;
+        pendingAgentPermissionRequestId=requestId;
+        pendingAgentPermissionId=permissionId;
+        pendingAgentPermissionTool=tool;
+        pendingAgentPermissionArguments=arguments;
+        toolStatus.setText("Permission waiting…");
+    }
+
+    private void showPendingAgentPermissionIfAny() {
+        if (interactionDialogOpen || pendingAgentPermissionId==null) return;
+        String expectedId=pendingAgentPermissionExpectedId, requestId=pendingAgentPermissionRequestId, permissionId=pendingAgentPermissionId, tool=pendingAgentPermissionTool, arguments=pendingAgentPermissionArguments;
+        pendingAgentPermissionExpectedId=null; pendingAgentPermissionRequestId=null; pendingAgentPermissionId=null; pendingAgentPermissionTool=null; pendingAgentPermissionArguments=null;
+        showAgentPermission(expectedId,requestId,permissionId,tool,arguments);
+    }
+
+    private void finishInteractionDialog() {
+        interactionDialogOpen=false;
+        activeAgentPermissionDialog=null;
+        if (pendingAgentPermissionId!=null) showPendingAgentPermissionIfAny();
+        else refreshPendingInteractions();
+    }
+
+    private android.widget.Button agentPermissionButton(String label) {
+        android.widget.Button button=new android.widget.Button(this);
+        button.setText(label);
+        button.setAllCaps(false);
+        button.setTextSize(15);
+        button.setMinHeight(dp(48));
+        return button;
+    }
+
     private void showAgentPermission(String expectedId,String requestId,String permissionId,String tool,String arguments) {
         if (!expectedId.equals(currentSessionId) || !requestId.equals(activeProviderRequestId)) return;
-        if (activeAgentPermissionDialog != null && activeAgentPermissionDialog.isShowing()) activeAgentPermissionDialog.dismiss();
-        interactionDialogOpen = true;
-        String detail = tool + "\n\n" + trim(arguments, 500);
-        String[] choices = {"Allow once","Approve all for this task","Always allow this exact action","Reject"};
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Allow agent tool?").setMessage(detail).setItems(choices,(d,which)->{
-            if(which==0) replyAgentPermission(expectedId,requestId,permissionId,true);
-            else if(which==1){ approveAllAgentRequests.add(requestId); replyAgentPermission(expectedId,requestId,permissionId,true); }
-            else if(which==2){ rememberAgentActionAlwaysAllowed(tool,arguments); replyAgentPermission(expectedId,requestId,permissionId,true); }
-            else replyAgentPermission(expectedId,requestId,permissionId,false);
-        }).create();
+        if (interactionDialogOpen) {
+            queueAgentPermission(expectedId,requestId,permissionId,tool,arguments);
+            return;
+        }
+        interactionDialogOpen=true;
+        LinearLayout panel=new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(20),dp(4),dp(20),dp(12));
+        TextView detail=simpleText(tool+"\n\n"+trim(arguments,500),14,R.color.cc_text);
+        detail.setTextIsSelectable(true);
+        panel.addView(detail,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));
+        android.widget.Button once=agentPermissionButton("Allow once");
+        android.widget.Button all=agentPermissionButton("Approve all for this task");
+        android.widget.Button always=agentPermissionButton("Always allow this exact action");
+        android.widget.Button reject=agentPermissionButton("Reject");
+        panel.addView(once); panel.addView(all); panel.addView(always); panel.addView(reject);
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Allow agent tool?").setView(panel).create();
         dialog.setCancelable(false);
-        dialog.setOnDismissListener(d->{ activeAgentPermissionDialog=null; interactionDialogOpen=false; });
-        activeAgentPermissionDialog=dialog; dialog.show();
+        once.setOnClickListener(v->{ dialog.dismiss(); replyAgentPermission(expectedId,requestId,permissionId,true); });
+        all.setOnClickListener(v->{ approveAllAgentRequests.add(requestId); dialog.dismiss(); replyAgentPermission(expectedId,requestId,permissionId,true); });
+        always.setOnClickListener(v->{ rememberAgentActionAlwaysAllowed(tool,arguments); dialog.dismiss(); replyAgentPermission(expectedId,requestId,permissionId,true); });
+        reject.setOnClickListener(v->{ dialog.dismiss(); replyAgentPermission(expectedId,requestId,permissionId,false); });
+        dialog.setOnDismissListener(d->finishInteractionDialog());
+        activeAgentPermissionDialog=dialog;
+        dialog.show();
     }
 
     private void replyAgentPermission(String expectedId,String requestId,String permissionId,boolean allow) {
@@ -1515,7 +1569,7 @@ public final class MainActivity extends Activity {
                 .setNeutralButton("Always", (d, w) -> replyPermission(requestId, "always"))
                 .setNegativeButton("Reject", (d, w) -> replyPermission(requestId, "reject"))
                 .create();
-        dialog.setOnDismissListener(d -> { interactionDialogOpen = false; refreshPendingInteractions(); });
+        dialog.setOnDismissListener(d -> finishInteractionDialog());
         dialog.show();
     }
 
@@ -1793,20 +1847,27 @@ public final class MainActivity extends Activity {
     }
 
     private void showRunCommand() {
+        if (interactionDialogOpen) {
+            toast("Finish the current interaction first");
+            return;
+        }
         EditText input = new EditText(this);
         input.setHint("Command");
         input.setSingleLine(false);
         input.setMinLines(2);
-        new AlertDialog.Builder(this)
+        interactionDialogOpen = true;
+        AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("Run in " + shortPath(directory))
                 .setMessage("Runs through the ClosedCode Termux command path.")
                 .setView(input)
-                .setPositiveButton("Run", (dialog, which) -> {
+                .setPositiveButton("Run", (d, which) -> {
                     String command = input.getText().toString();
                     if (!command.trim().isEmpty()) runWorkspaceCommand(command);
                 })
                 .setNegativeButton("Cancel", null)
-                .show();
+                .create();
+        dialog.setOnDismissListener(d -> finishInteractionDialog());
+        dialog.show();
     }
 
     private void runWorkspaceCommand(String command) {
