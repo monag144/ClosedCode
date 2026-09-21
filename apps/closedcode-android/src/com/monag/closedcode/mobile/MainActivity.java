@@ -1426,12 +1426,12 @@ public final class MainActivity extends Activity {
             return;
         }
         composer.setText("");
-        addMessageBubble("user", text);
         toolStatus.setText("Steering…");
         api.steerAgentRequest(requestId, text, new ClosedCodeApi.Callback() {
             @Override public void success(String body) {
-                if (!expectedId.equals(currentSessionId) || !requestId.equals(activeProviderRequestId)) return;
-                toolStatus.setText("Steering queued…");
+                if (!expectedId.equals(currentSessionId)) return;
+                addMessageBubble("user", text);
+                toolStatus.setText(requestId.equals(activeProviderRequestId) ? "Steering queued…" : "Steering saved");
             }
 
             @Override public void failure(String message) {

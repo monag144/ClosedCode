@@ -24,7 +24,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.8.16"
+VERSION = "0.8.17"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -43,6 +43,7 @@ PROVIDERS = {
 
 ACTIVE_STREAMS_LOCK = threading.Lock()
 ACTIVE_STREAMS = {}
+HISTORY_LOCK = threading.RLock()
 
 ACTIVE_PERMISSIONS_LOCK = threading.Lock()
 ACTIVE_PERMISSIONS = {}
@@ -55,11 +56,13 @@ def validate_request_id(value):
     return value
 
 
-def active_stream_register(request_id: str, upstream):
+def active_stream_register(request_id: str, upstream, session_id: str | None = None):
+    if session_id is not None:
+        history_path(session_id)
     with ACTIVE_STREAMS_LOCK:
         if request_id in ACTIVE_STREAMS:
             raise ValueError("requestID already active")
-        ACTIVE_STREAMS[request_id] = {"upstream": upstream, "cancelled": False, "steering": []}
+        ACTIVE_STREAMS[request_id] = {"upstream": upstream, "cancelled": False, "steering": [], "sessionID": session_id}
 
 
 def active_stream_cancel(request_id: str) -> bool:
@@ -117,6 +120,10 @@ def active_stream_steer(request_id: str, text: str) -> bool:
         entry = ACTIVE_STREAMS.get(request_id)
         if not entry or entry.get("cancelled"):
             return False
+        session_id = entry.get("sessionID")
+        if not session_id:
+            return False
+        persist_messages(session_id, [{"role": "user", "content": text}])
         entry.setdefault("steering", []).append(text)
     return True
 
@@ -542,6 +549,19 @@ def append_timeline(sid,items):
     p=timeline_path(sid); t=p.with_suffix(".tmp")
     t.write_text(json.dumps(v,ensure_ascii=False,separators=(",",":")),encoding="utf-8"); os.chmod(t,0o600); os.replace(t,p)
     return v
+
+def persist_messages(session_id: str, messages) -> list[dict]:
+    incoming = normalize_history_messages(messages)
+    timeline = [{"kind": "message", "role": q["role"], "content": q["content"]} for q in incoming]
+    with HISTORY_LOCK:
+        stored = append_history(session_id, incoming)
+        if timeline:
+            append_timeline(session_id, timeline)
+    return stored
+
+def persist_timeline_items(session_id: str, items) -> list[dict]:
+    with HISTORY_LOCK:
+        return append_timeline(session_id, items)
 
 
 MAX_FILE_BYTES = 2 * 1024 * 1024
@@ -1365,17 +1385,22 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("model is required")
                 history_path(session_id)
                 workspace_root(root_value)
+                prior_history = load_history(session_id)
                 current_history_messages = normalize_history_messages(messages)
                 if not current_history_messages:
                     raise ValueError("messages must be a non-empty array")
-                current_timeline=[{"kind":"message","role":q["role"],"content":q["content"]} for q in current_history_messages]
                 if finalize_after_tools is not None:
                     if isinstance(finalize_after_tools, bool) or not isinstance(finalize_after_tools, int):
                         raise ValueError("finalizeAfterTools must be an integer")
                     if finalize_after_tools < 1 or finalize_after_tools > 100000:
                         raise ValueError("finalizeAfterTools must be between 1 and 100000")
 
-                active_stream_register(request_id, None)
+                active_stream_register(request_id, None, session_id)
+                try:
+                    persist_messages(session_id, current_history_messages)
+                except Exception:
+                    active_stream_unregister(request_id)
+                    raise
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")
                 self.send_header("Cache-Control", "no-cache, no-store")
@@ -1404,7 +1429,7 @@ class Handler(BaseHTTPRequestHandler):
                         "changed and meaningful test/build results."
                     ),
                 }
-                conversation = [system] + load_history(session_id) + current_history_messages
+                conversation = [system] + prior_history + current_history_messages
                 key = provider_key(provider_id)
                 upstream_url = provider_base(provider_id) + "/chat/completions"
                 final_text = ""
@@ -1439,8 +1464,7 @@ class Handler(BaseHTTPRequestHandler):
                             for steering_text in queued_steering:
                                 steering_message = {"role": "user", "content": steering_text}
                                 conversation.append(steering_message)
-                                current_history_messages.append(steering_message)
-                                current_timeline.append({"kind":"message","role":"user","content":steering_text})
+
                             steering_event = {
                                 "closedcode": {
                                     "type": "steering",
@@ -1574,7 +1598,7 @@ class Handler(BaseHTTPRequestHandler):
                                 for steering_text in queued_steering:
                                     steering_message = {"role": "user", "content": steering_text}
                                     conversation.append(steering_message)
-                                    current_history_messages.append(steering_message)
+
                                 steering_event = {
                                     "closedcode": {
                                         "type": "steering",
@@ -1686,7 +1710,7 @@ class Handler(BaseHTTPRequestHandler):
                                         "detail": result_text[:1000],
                                     }
                                 }
-                                current_timeline.append({"kind":"tool","name":name,"status":"completed" if result.get("ok") else "error","detail":result_text[:1000]})
+                                persist_timeline_items(session_id, [{"kind":"tool","name":name,"status":"completed" if result.get("ok") else "error","detail":result_text[:1000]}])
                                 self.wfile.write(("data: " + json.dumps(result_event, separators=(",", ":")) + "\n\n").encode("utf-8"))
                                 self.wfile.flush()
                                 recent_tool_signatures.append(agent_tool_signature(name, arguments, result))
@@ -1747,14 +1771,8 @@ class Handler(BaseHTTPRequestHandler):
                         termination_reason = "cancelled"
                     active_stream_unregister(request_id)
                     try:
-                        additions = list(current_history_messages)
                         if final_text:
-                            additions.append({"role": "assistant", "content": final_text})
-                        if additions:
-                            append_history(session_id, additions)
-                        tv=list(current_timeline)
-                        if final_text: tv.append({"kind":"message","role":"assistant","content":final_text})
-                        if tv: append_timeline(session_id,tv)
+                            persist_messages(session_id, [{"role": "assistant", "content": final_text}])
                     except Exception:
                         pass
                     try:
