@@ -1,12 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="cc_bg">#090A0B</color>
-    <color name="cc_surface">#111315</color>
-    <color name="cc_surface_2">#171A1D</color>
-    <color name="cc_border">#2A2E32</color>
-    <color name="cc_text">#F4F5F6</color>
-    <color name="cc_muted">#9AA0A6</color>
-    <color name="cc_accent">#D7FF3F</color>
-    <color name="cc_good">#56D364</color>
-    <color name="cc_bad">#FF6B6B</color>
+    <color name="cc_dark_bg">#090A0B</color><color name="cc_dark_surface">#111315</color><color name="cc_dark_surface_2">#171A1D</color><color name="cc_dark_border">#2A2E32</color><color name="cc_dark_text">#F4F5F6</color><color name="cc_dark_muted">#9AA0A6</color><color name="cc_dark_accent">#D7FF3F</color><color name="cc_dark_good">#56D364</color><color name="cc_dark_bad">#FF6B6B</color>
+    <color name="cc_light_bg">#F7F8F5</color><color name="cc_light_surface">#FFFFFF</color><color name="cc_light_surface_2">#E9EDE7</color><color name="cc_light_border">#C4CBC2</color><color name="cc_light_text">#171A18</color><color name="cc_light_muted">#657068</color><color name="cc_light_accent">#557A24</color><color name="cc_light_good">#237A3B</color><color name="cc_light_bad">#B3261E</color>
+    <color name="cc_mint_bg">#1B1310</color><color name="cc_mint_surface">#261A16</color><color name="cc_mint_surface_2">#30211B</color><color name="cc_mint_border">#5A3C30</color><color name="cc_mint_text">#F8EFE8</color><color name="cc_mint_muted">#C3AFA5</color><color name="cc_mint_accent">#8EF0C2</color><color name="cc_mint_good">#72D89C</color><color name="cc_mint_bad">#FF8A80</color>
 </resources>

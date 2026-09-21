@@ -283,6 +283,26 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
+                    android:text="APPEARANCE"
+                    android:textColor="@color/cc_muted"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+                <LinearLayout
+                    android:id="@+id/themeRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="58dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+                    <TextView android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center_vertical" android:text="Theme" android:textColor="@color/cc_text" android:textSize="15sp" />
+                    <TextView android:id="@+id/themeValue" android:layout_width="wrap_content" android:layout_height="match_parent" android:gravity="center_vertical" android:text="Dark" android:textColor="@color/cc_accent" android:textSize="14sp" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
                     android:text="SECURITY"
                     android:textColor="@color/cc_muted"
                     android:textSize="11sp"

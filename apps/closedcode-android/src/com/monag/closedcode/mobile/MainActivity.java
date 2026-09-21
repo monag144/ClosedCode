@@ -78,6 +78,7 @@ public final class MainActivity extends Activity {
     private TextView completionSoundChoose;
     private TextView completionSoundTest;
     private TextView completionSoundLabel;
+    private TextView themeValue;
     private boolean interactionDialogOpen;
     private boolean pageTransitionRunning;
     private boolean promptRunning;
@@ -142,9 +143,10 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle state) {
+        prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        applySavedTheme();
         super.onCreate(state);
         setContentView(R.layout.activity_main);
-        prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         directory = prefs.getString("directory", DEFAULT_DIRECTORY);
         String url = prefs.getString("url", DEFAULT_URL);
         api = new ClosedCodeApi(url);
@@ -172,6 +174,24 @@ public final class MainActivity extends Activity {
         showPage("sessions");
         handleCompletionIntent(getIntent());
         refreshEverything();
+    }
+
+    private void applySavedTheme() {
+        String value=prefs.getString("appTheme","dark");
+        if("light".equals(value)) setTheme(R.style.Theme_ClosedCode_Light);
+        else if("chocolate_mint".equals(value)) setTheme(R.style.Theme_ClosedCode_ChocolateMint);
+        else setTheme(R.style.Theme_ClosedCode);
+    }
+
+    private void updateThemeUi() {
+        if(themeValue==null)return; String value=prefs.getString("appTheme","dark");
+        themeValue.setText("light".equals(value)?"Light":"chocolate_mint".equals(value)?"Chocolate Mint":"Dark");
+    }
+
+    private void showThemePicker() {
+        String[] labels={"Dark","Light","Chocolate Mint"}; String[] values={"dark","light","chocolate_mint"}; String current=prefs.getString("appTheme","dark"); int checked=0;
+        for(int i=0;i<values.length;i++) if(values[i].equals(current)) checked=i;
+        new AlertDialog.Builder(this).setTitle("Theme").setSingleChoiceItems(labels,checked,(d,which)->{ prefs.edit().putString("appTheme",values[which]).apply(); d.dismiss(); recreate(); }).setNegativeButton("Cancel",null).show();
     }
 
     private void bindViews() {
@@ -220,6 +240,7 @@ public final class MainActivity extends Activity {
         completionSoundChoose = findViewById(R.id.completionSoundChoose);
         completionSoundTest = findViewById(R.id.completionSoundTest);
         completionSoundLabel = findViewById(R.id.completionSoundLabel);
+        themeValue = findViewById(R.id.themeValue);
     }
 
     private void bindActions() {
@@ -242,6 +263,8 @@ public final class MainActivity extends Activity {
         effortChip.setOnClickListener(v -> composerUi.showEffortPicker());
         usageButton.setOnClickListener(v -> composerUi.showUsage());
         voiceButton.setOnClickListener(v -> startVoiceInput());
+        findViewById(R.id.themeRow).setOnClickListener(v -> showThemePicker());
+        updateThemeUi();
         bindToggle(R.id.biometricRow, biometricSwitch, "requireBiometrics", false, false);
         bindToggle(R.id.hidePreviewRow, hidePreviewSwitch, "hideAppPreview", false, true);
         bindToggle(R.id.yoloRow, yoloSwitch, "yoloAutonomy", false, false);

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <attr name="ccBg" format="color"/><attr name="ccSurface" format="color"/><attr name="ccSurface2" format="color"/>
+    <attr name="ccBorder" format="color"/><attr name="ccText" format="color"/><attr name="ccMuted" format="color"/>
+    <attr name="ccAccent" format="color"/><attr name="ccGood" format="color"/><attr name="ccBad" format="color"/>
+</resources>

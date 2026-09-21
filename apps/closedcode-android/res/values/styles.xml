@@ -1,11 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.ClosedCode" parent="@android:style/Theme.Material.NoActionBar">
-        <item name="android:fontFamily">sans</item>
-        <item name="android:windowLightStatusBar">false</item>
-        <item name="android:statusBarColor">@color/cc_bg</item>
-        <item name="android:navigationBarColor">@color/cc_bg</item>
-        <item name="android:windowActionModeOverlay">true</item>
-        <item name="android:colorAccent">@color/cc_accent</item>
+        <item name="android:fontFamily">sans</item><item name="android:windowLightStatusBar">false</item><item name="android:windowActionModeOverlay">true</item>
+        <item name="ccBg">@color/cc_dark_bg</item><item name="ccSurface">@color/cc_dark_surface</item><item name="ccSurface2">@color/cc_dark_surface_2</item><item name="ccBorder">@color/cc_dark_border</item><item name="ccText">@color/cc_dark_text</item><item name="ccMuted">@color/cc_dark_muted</item><item name="ccAccent">@color/cc_dark_accent</item><item name="ccGood">@color/cc_dark_good</item><item name="ccBad">@color/cc_dark_bad</item>
+        <item name="android:statusBarColor">@color/cc_dark_bg</item><item name="android:navigationBarColor">@color/cc_dark_bg</item><item name="android:colorAccent">@color/cc_dark_accent</item>
+    </style>
+    <style name="Theme.ClosedCode.Light" parent="Theme.ClosedCode">
+        <item name="android:windowLightStatusBar">true</item><item name="ccBg">@color/cc_light_bg</item><item name="ccSurface">@color/cc_light_surface</item><item name="ccSurface2">@color/cc_light_surface_2</item><item name="ccBorder">@color/cc_light_border</item><item name="ccText">@color/cc_light_text</item><item name="ccMuted">@color/cc_light_muted</item><item name="ccAccent">@color/cc_light_accent</item><item name="ccGood">@color/cc_light_good</item><item name="ccBad">@color/cc_light_bad</item><item name="android:statusBarColor">@color/cc_light_bg</item><item name="android:navigationBarColor">@color/cc_light_bg</item><item name="android:colorAccent">@color/cc_light_accent</item>
+    </style>
+    <style name="Theme.ClosedCode.ChocolateMint" parent="Theme.ClosedCode">
+        <item name="ccBg">@color/cc_mint_bg</item><item name="ccSurface">@color/cc_mint_surface</item><item name="ccSurface2">@color/cc_mint_surface_2</item><item name="ccBorder">@color/cc_mint_border</item><item name="ccText">@color/cc_mint_text</item><item name="ccMuted">@color/cc_mint_muted</item><item name="ccAccent">@color/cc_mint_accent</item><item name="ccGood">@color/cc_mint_good</item><item name="ccBad">@color/cc_mint_bad</item><item name="android:statusBarColor">@color/cc_mint_bg</item><item name="android:navigationBarColor">@color/cc_mint_bg</item><item name="android:colorAccent">@color/cc_mint_accent</item>
     </style>
 </resources>
