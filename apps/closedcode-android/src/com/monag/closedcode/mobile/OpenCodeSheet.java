@@ -11,6 +11,7 @@ import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -198,6 +199,9 @@ public final class OpenCodeSheet {
         handleBg.setColor(activity.getColor(R.color.cc_border));
         handleBg.setCornerRadius(dp(activity, 99));
         handle.setBackground(handleBg);
+        handle.setClickable(true);
+        handle.setFocusable(true);
+        handle.setContentDescription("Drag sheet up to expand or down to close");
         LinearLayout.LayoutParams handleLp = new LinearLayout.LayoutParams(dp(activity, 42), dp(activity, 4));
         handleLp.gravity = Gravity.CENTER_HORIZONTAL;
         handleLp.setMargins(0, dp(activity, 2), 0, dp(activity, 12));
@@ -342,7 +346,76 @@ public final class OpenCodeSheet {
         if (focus != null) {
             window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         }
+        attachSheetDrag(activity, dialog, content, window, heightFraction);
         dialog.show();
+    }
+
+    private static void attachSheetDrag(
+            Activity activity,
+            Dialog dialog,
+            View content,
+            Window window,
+            float initialHeightFraction) {
+        if (!(content instanceof ViewGroup)) return;
+        ViewGroup group = (ViewGroup) content;
+        if (group.getChildCount() == 0) return;
+        View handle = group.getChildAt(0);
+        final float[] startRawY = {0f};
+        final boolean[] moved = {false};
+        final int touchSlop = dp(activity, 6);
+        final int dismissFloor = dp(activity, 120);
+
+        handle.setOnTouchListener((v, event) -> {
+            if (!dialog.isShowing() && event.getActionMasked() != MotionEvent.ACTION_DOWN) return false;
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    content.animate().cancel();
+                    startRawY[0] = event.getRawY();
+                    moved[0] = false;
+                    v.getParent().requestDisallowInterceptTouchEvent(true);
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    float dy = event.getRawY() - startRawY[0];
+                    if (Math.abs(dy) >= touchSlop) moved[0] = true;
+                    if (moved[0]) {
+                        float upwardLimit = -dp(activity, 72);
+                        content.setTranslationY(Math.max(upwardLimit, dy));
+                    }
+                    return true;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    v.getParent().requestDisallowInterceptTouchEvent(false);
+                    float releaseDy = event.getRawY() - startRawY[0];
+                    if (event.getActionMasked() == MotionEvent.ACTION_CANCEL || !moved[0]) {
+                        content.animate().translationY(0f).setDuration(TRANSITION_MS).setInterpolator(new DecelerateInterpolator()).start();
+                        return true;
+                    }
+                    int contentHeight = Math.max(1, content.getHeight());
+                    int dismissThreshold = Math.max(dismissFloor, Math.round(contentHeight * 0.22f));
+                    if (releaseDy >= dismissThreshold) {
+                        content.animate()
+                                .translationY(contentHeight)
+                                .alpha(0.35f)
+                                .setDuration(TRANSITION_MS)
+                                .setInterpolator(new DecelerateInterpolator())
+                                .withEndAction(dialog::dismiss)
+                                .start();
+                        return true;
+                    }
+                    if (releaseDy <= -dp(activity, 48)) {
+                        WindowManager.LayoutParams expanded = window.getAttributes();
+                        int target = (int) (activity.getResources().getDisplayMetrics().heightPixels * 0.94f);
+                        expanded.height = Math.max(expanded.height, target);
+                        window.setAttributes(expanded);
+                        content.animate().translationY(0f).alpha(1f).setDuration(TRANSITION_MS).setInterpolator(new DecelerateInterpolator()).start();
+                        return true;
+                    }
+                    content.animate().translationY(0f).alpha(1f).setDuration(TRANSITION_MS).setInterpolator(new DecelerateInterpolator()).start();
+                    return true;
+                default:
+                    return false;
+            }
+        });
     }
 
     private static void dismissThen(Dialog dialog, View content, View trigger, Runnable after) {
