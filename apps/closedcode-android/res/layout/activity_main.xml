@@ -381,14 +381,14 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="YOLO / Full Danger Access"
+                            android:text="YOLO / Auto-approve"
                             android:textColor="@color/cc_text"
                             android:textSize="15sp" />
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
-                            android:text="Auto-approve ordinary project coding tools. Task scope still applies."
+                            android:text="Auto-approve workspace-scoped coding tools. Shell still asks. This is not Full Access."
                             android:textColor="@color/cc_muted"
                             android:textSize="11sp" />
                     </LinearLayout>

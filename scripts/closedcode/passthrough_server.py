@@ -24,7 +24,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.8.17"
+VERSION = "0.8.18"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -48,6 +48,7 @@ HISTORY_LOCK = threading.RLock()
 ACTIVE_PERMISSIONS_LOCK = threading.Lock()
 ACTIVE_PERMISSIONS = {}
 AGENT_APPROVAL_TOOLS = {"workspace_write", "workspace_patch", "workspace_mkdir", "workspace_move", "workspace_delete", "shell"}
+YOLO_AUTO_APPROVAL_TOOLS = {"workspace_write", "workspace_patch", "workspace_mkdir", "workspace_move", "workspace_delete"}
 
 
 def validate_request_id(value):
@@ -1408,10 +1409,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.end_headers()
 
                 autonomy_note = (
-                    "Autonomy mode is YOLO/FULL DANGER ACCESS: do not ask for routine project-development approval. "
-                    "Continue through ordinary inspect/edit/build/test/diagnose/repair loops independently. "
-                    "This does not expand task scope: do not damage Android/system paths, Termux internals, unrelated "
-                    "repositories, personal files, credentials, or protected GPT-Termux-Relay infrastructure. "
+                    "Autonomy mode is YOLO/AUTO-APPROVE: routine workspace-scoped mutation tools run without prompts, "
+                    "but shell commands remain approval-gated. Containment and task scope still apply. This is not Full Access. "
+                    "Continue through ordinary inspect/edit/build/test/diagnose/repair loops independently within those limits. "
                     if autonomy == "yolo"
                     else
                     "Autonomy mode is ASK/GUARDED: mutating tools may require explicit user approval. "
@@ -1630,7 +1630,7 @@ class Handler(BaseHTTPRequestHandler):
                                     name = "unknown"
                                 try:
                                     arguments = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
-                                    if name in AGENT_APPROVAL_TOOLS and autonomy != "yolo":
+                                    if name in AGENT_APPROVAL_TOOLS and not (autonomy == "yolo" and name in YOLO_AUTO_APPROVAL_TOOLS):
                                         permission_id = agent_permission_id(request_id, call_id, round_index)
                                         agent_permission_register(permission_id, request_id)
                                         try:

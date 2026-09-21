@@ -5,3 +5,7 @@ for q in ['android:id="@+id/themeRow"','android:id="@+id/themeValue"','APPEARANC
 for q in ['Theme.ClosedCode.Light','Theme.ClosedCode.ChocolateMint','ccAccent','ccBg']: assert q in s,q
 for name in ['cc_bg','cc_surface','cc_surface_2','cc_border','cc_text','cc_muted','cc_accent','cc_good','cc_bad']: assert (r/'apps/closedcode-android/res/color'/(name+'.xml')).exists(),name
 print('THEME_REGRESSION_GREEN')
+
+# Chocolate Mint interactive controls use mint fill with dark text without changing Dark/Light palettes.
+for q in ['applyThemeSpecificControls','R.color.cc_mint_accent','android.graphics.Color.rgb(16, 16, 16)','modelChip, agentChip, effortChip, voiceButton, stopButton']:
+ assert q in m,q

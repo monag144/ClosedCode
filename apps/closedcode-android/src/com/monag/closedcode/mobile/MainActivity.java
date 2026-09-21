@@ -193,6 +193,18 @@ public final class MainActivity extends Activity {
         themeValue.setText("light".equals(value)?"Light":"chocolate_mint".equals(value)?"Chocolate Mint":"Dark");
     }
 
+    private void applyThemeSpecificControls() {
+        if (!"chocolate_mint".equals(prefs.getString("appTheme", "dark"))) return;
+        android.content.res.ColorStateList mint = android.content.res.ColorStateList.valueOf(getColor(R.color.cc_mint_accent));
+        int black = android.graphics.Color.rgb(16, 16, 16);
+        TextView[] controls = {modelChip, agentChip, effortChip, voiceButton, stopButton};
+        for (TextView control : controls) {
+            if (control == null) continue;
+            control.setBackgroundTintList(mint);
+            control.setTextColor(black);
+        }
+    }
+
     private void showThemePicker() {
         String[] labels={"Dark","Light","Chocolate Mint"}; String[] values={"dark","light","chocolate_mint"}; String current=prefs.getString("appTheme","dark"); int checked=0;
         for(int i=0;i<values.length;i++) if(values[i].equals(current)) checked=i;
@@ -270,6 +282,7 @@ public final class MainActivity extends Activity {
         voiceButton.setOnClickListener(v -> startVoiceInput());
         findViewById(R.id.themeRow).setOnClickListener(v -> showThemePicker());
         updateThemeUi();
+        applyThemeSpecificControls();
         bindToggle(R.id.biometricRow, biometricSwitch, "requireBiometrics", false, false);
         bindToggle(R.id.hidePreviewRow, hidePreviewSwitch, "hideAppPreview", false, true);
         bindToggle(R.id.yoloRow, yoloSwitch, "yoloAutonomy", false, false);
@@ -1310,13 +1323,33 @@ public final class MainActivity extends Activity {
                 });
     }
 
-    private String agentApprovalKey(String tool, String arguments) {
+    private boolean isWorkspaceScopedApprovalTool(String tool) {
+        return "workspace_write".equals(tool) || "workspace_patch".equals(tool)
+                || "workspace_mkdir".equals(tool) || "workspace_move".equals(tool)
+                || "workspace_delete".equals(tool);
+    }
+
+    private String approvalWorkspaceKey() {
+        return directory == null ? "" : directory.trim();
+    }
+
+    private String legacyAgentApprovalKey(String tool, String arguments) {
         return (tool == null ? "" : tool) + "\u001f" + (arguments == null ? "{}" : arguments);
+    }
+
+    private String agentApprovalKey(String tool, String arguments) {
+        String safeTool = tool == null ? "" : tool;
+        if (isWorkspaceScopedApprovalTool(safeTool)) {
+            return "workspace\u001f" + approvalWorkspaceKey() + "\u001f" + safeTool;
+        }
+        return "exact\u001f" + approvalWorkspaceKey() + "\u001f" + safeTool + "\u001f"
+                + (arguments == null ? "{}" : arguments);
     }
 
     private boolean isAgentActionAlwaysAllowed(String tool, String arguments) {
         java.util.Set<String> saved = prefs.getStringSet("agentAlwaysAllowedActions", java.util.Collections.emptySet());
-        return saved != null && saved.contains(agentApprovalKey(tool, arguments));
+        return saved != null && (saved.contains(agentApprovalKey(tool, arguments))
+                || saved.contains(legacyAgentApprovalKey(tool, arguments)));
     }
 
     private void rememberAgentActionAlwaysAllowed(String tool, String arguments) {
@@ -1374,7 +1407,8 @@ public final class MainActivity extends Activity {
         panel.addView(detail,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));
         android.widget.Button once=agentPermissionButton("Allow once");
         android.widget.Button all=agentPermissionButton("Approve all for this task");
-        android.widget.Button always=agentPermissionButton("Always allow this exact action");
+        String persistentLabel=isWorkspaceScopedApprovalTool(tool) ? "Always allow this tool in this workspace" : "Always allow this exact command";
+        android.widget.Button always=agentPermissionButton(persistentLabel);
         android.widget.Button reject=agentPermissionButton("Reject");
         panel.addView(once); panel.addView(all); panel.addView(always); panel.addView(reject);
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Allow agent tool?").setView(panel).create();

@@ -1,7 +1,7 @@
 from pathlib import Path
 import importlib.util, os, tempfile
 r=Path(__file__).resolve().parents[3]; bp=r/"scripts/closedcode/passthrough_server.py"; b=bp.read_text(); m=(r/"apps/closedcode-android/src/com/monag/closedcode/mobile/MainActivity.java").read_text()
-for q in ["VERSION = \"0.8.17\"","HISTORY_LOCK = threading.RLock()","persist_messages(session_id, current_history_messages)","active_stream_register(request_id, None, session_id)","persist_timeline_items(session_id","conversation = [system] + prior_history + current_history_messages"]: assert q in b,q
+for q in ["VERSION = \"0.8.18\"","HISTORY_LOCK = threading.RLock()","persist_messages(session_id, current_history_messages)","active_stream_register(request_id, None, session_id)","persist_timeline_items(session_id","conversation = [system] + prior_history + current_history_messages"]: assert q in b,q
 assert "current_timeline" not in b
 assert 'addMessageBubble("user", text);\n                toolStatus.setText(requestId.equals(activeProviderRequestId)' in m
 sp=importlib.util.spec_from_file_location("ccdur",bp); mod=importlib.util.module_from_spec(sp); sp.loader.exec_module(mod)
