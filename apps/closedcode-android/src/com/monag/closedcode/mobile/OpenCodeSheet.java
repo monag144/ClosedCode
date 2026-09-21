@@ -194,18 +194,24 @@ public final class OpenCodeSheet {
         root.setPadding(0, dp(activity, 8), 0, 0);
         root.setBackground(roundRect(activity, activity.getColor(R.color.cc_surface), 24, activity.getColor(R.color.cc_border), 1));
 
+        LinearLayout dragSurface = new LinearLayout(activity);
+        dragSurface.setGravity(Gravity.CENTER);
+        dragSurface.setClickable(true);
+        dragSurface.setFocusable(true);
+        dragSurface.setContentDescription("Drag sheet up to expand or down to close");
+
         View handle = new View(activity);
         GradientDrawable handleBg = new GradientDrawable();
         handleBg.setColor(activity.getColor(R.color.cc_border));
         handleBg.setCornerRadius(dp(activity, 99));
         handle.setBackground(handleBg);
-        handle.setClickable(true);
-        handle.setFocusable(true);
-        handle.setContentDescription("Drag sheet up to expand or down to close");
         LinearLayout.LayoutParams handleLp = new LinearLayout.LayoutParams(dp(activity, 42), dp(activity, 4));
-        handleLp.gravity = Gravity.CENTER_HORIZONTAL;
-        handleLp.setMargins(0, dp(activity, 2), 0, dp(activity, 12));
-        root.addView(handle, handleLp);
+        dragSurface.addView(handle, handleLp);
+
+        LinearLayout.LayoutParams dragSurfaceLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(activity, 48));
+        root.addView(dragSurface, dragSurfaceLp);
 
         TextView heading = text(activity, title, 18, R.color.cc_text);
         heading.setTypeface(null, Typeface.BOLD);
@@ -359,13 +365,13 @@ public final class OpenCodeSheet {
         if (!(content instanceof ViewGroup)) return;
         ViewGroup group = (ViewGroup) content;
         if (group.getChildCount() == 0) return;
-        View handle = group.getChildAt(0);
+        View dragSurface = group.getChildAt(0);
         final float[] startRawY = {0f};
         final boolean[] moved = {false};
         final int touchSlop = dp(activity, 6);
         final int dismissFloor = dp(activity, 120);
 
-        handle.setOnTouchListener((v, event) -> {
+        dragSurface.setOnTouchListener((v, event) -> {
             if (!dialog.isShowing() && event.getActionMasked() != MotionEvent.ACTION_DOWN) return false;
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
@@ -387,6 +393,7 @@ public final class OpenCodeSheet {
                     v.getParent().requestDisallowInterceptTouchEvent(false);
                     float releaseDy = event.getRawY() - startRawY[0];
                     if (event.getActionMasked() == MotionEvent.ACTION_CANCEL || !moved[0]) {
+                        if (event.getActionMasked() == MotionEvent.ACTION_UP) v.performClick();
                         content.animate().translationY(0f).setDuration(TRANSITION_MS).setInterpolator(new DecelerateInterpolator()).start();
                         return true;
                     }
