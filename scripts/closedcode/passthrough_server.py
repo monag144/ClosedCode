@@ -24,7 +24,7 @@ from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import parse_qs, urlparse
 
-VERSION = "0.8.15"
+VERSION = "0.8.16"
 MAX_BODY = 2 * 1024 * 1024
 DEFAULT_AUTH_PATH = Path.home() / ".local" / "share" / "opencode" / "auth.json"
 DEFAULT_HISTORY_ROOT = Path.home() / ".local" / "share" / "closedcode" / "passthrough-history"
@@ -160,7 +160,7 @@ def agent_permission_resolve(permission_id: str, request_id: str, decision: str)
     return True
 
 
-def agent_permission_wait(permission_id: str, request_id: str, timeout_seconds: int = 120):
+def agent_permission_wait(permission_id: str, request_id: str, timeout_seconds: int = 600):
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
         if active_stream_cancelled(request_id):

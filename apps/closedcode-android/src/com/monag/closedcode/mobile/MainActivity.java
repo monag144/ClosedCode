@@ -102,6 +102,7 @@ public final class MainActivity extends Activity {
     private String selectedVariant;
     private String activeProviderRequestId;
     private AlertDialog activeAgentPermissionDialog;
+    private final java.util.HashSet<String> approveAllAgentRequests = new java.util.HashSet<>();
     private TextView providerStreamBody;
     private final StringBuilder providerStreamText = new StringBuilder();
     private final List<View> selectedTranscriptBlocks = new ArrayList<>();
@@ -1205,6 +1206,10 @@ public final class MainActivity extends Activity {
 
                     @Override public void permission(String permissionId, String name, String arguments) {
                         if (!expectedId.equals(currentSessionId) || !requestId.equals(activeProviderRequestId)) return;
+                        if (approveAllAgentRequests.contains(requestId) || isAgentActionAlwaysAllowed(name, arguments)) {
+                            replyAgentPermission(expectedId, requestId, permissionId, true);
+                            return;
+                        }
                         showAgentPermission(expectedId, requestId, permissionId, name, arguments);
                     }
 
@@ -1217,6 +1222,7 @@ public final class MainActivity extends Activity {
 
                     @Override public void complete(boolean cancelled) {
                         if (!expectedId.equals(currentSessionId) || !requestId.equals(activeProviderRequestId)) return;
+                        approveAllAgentRequests.remove(requestId);
                         activeProviderRequestId = null;
                         providerStreamBody = null;
                         passthroughSendActive = false;
@@ -1227,6 +1233,7 @@ public final class MainActivity extends Activity {
 
                     @Override public void failure(String message) {
                         if (!expectedId.equals(currentSessionId) || !requestId.equals(activeProviderRequestId)) return;
+                        approveAllAgentRequests.remove(requestId);
                         activeProviderRequestId = null;
                         providerStreamBody = null;
                         passthroughSendActive = false;
@@ -1237,50 +1244,49 @@ public final class MainActivity extends Activity {
                 });
     }
 
-    private void showAgentPermission(
-            String expectedId,
-            String requestId,
-            String permissionId,
-            String tool,
-            String arguments) {
-        if (!expectedId.equals(currentSessionId) || !requestId.equals(activeProviderRequestId)) return;
-        if (activeAgentPermissionDialog != null && activeAgentPermissionDialog.isShowing()) {
-            activeAgentPermissionDialog.dismiss();
-        }
-        interactionDialogOpen = true;
-        String detail = tool + "\n\n" + trim(arguments, 500);
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Allow agent tool?")
-                .setMessage(detail)
-                .setPositiveButton("Allow once", (d, w) ->
-                        replyAgentPermission(expectedId, requestId, permissionId, true))
-                .setNegativeButton("Reject", (d, w) ->
-                        replyAgentPermission(expectedId, requestId, permissionId, false))
-                .create();
-        dialog.setCancelable(false);
-        dialog.setOnDismissListener(d -> {
-            activeAgentPermissionDialog = null;
-            interactionDialogOpen = false;
-        });
-        activeAgentPermissionDialog = dialog;
-        dialog.show();
+    private String agentApprovalKey(String tool, String arguments) {
+        return (tool == null ? "" : tool) + "\u001f" + (arguments == null ? "{}" : arguments);
     }
 
-    private void replyAgentPermission(
-            String expectedId,
-            String requestId,
-            String permissionId,
-            boolean allow) {
-        api.replyAgentPermission(requestId, permissionId, allow, new ClosedCodeApi.Callback() {
-            @Override public void success(String body) {
-                if (!expectedId.equals(currentSessionId)) return;
+    private boolean isAgentActionAlwaysAllowed(String tool, String arguments) {
+        java.util.Set<String> saved = prefs.getStringSet("agentAlwaysAllowedActions", java.util.Collections.emptySet());
+        return saved != null && saved.contains(agentApprovalKey(tool, arguments));
+    }
+
+    private void rememberAgentActionAlwaysAllowed(String tool, String arguments) {
+        java.util.Set<String> saved = prefs.getStringSet("agentAlwaysAllowedActions", java.util.Collections.emptySet());
+        java.util.HashSet<String> updated = new java.util.HashSet<>();
+        if (saved != null) updated.addAll(saved);
+        updated.add(agentApprovalKey(tool, arguments));
+        prefs.edit().putStringSet("agentAlwaysAllowedActions", updated).apply();
+    }
+
+    private void showAgentPermission(String expectedId,String requestId,String permissionId,String tool,String arguments) {
+        if (!expectedId.equals(currentSessionId) || !requestId.equals(activeProviderRequestId)) return;
+        if (activeAgentPermissionDialog != null && activeAgentPermissionDialog.isShowing()) activeAgentPermissionDialog.dismiss();
+        interactionDialogOpen = true;
+        String detail = tool + "\n\n" + trim(arguments, 500);
+        String[] choices = {"Allow once","Approve all for this task","Always allow this exact action","Reject"};
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Allow agent tool?").setMessage(detail).setItems(choices,(d,which)->{
+            if(which==0) replyAgentPermission(expectedId,requestId,permissionId,true);
+            else if(which==1){ approveAllAgentRequests.add(requestId); replyAgentPermission(expectedId,requestId,permissionId,true); }
+            else if(which==2){ rememberAgentActionAlwaysAllowed(tool,arguments); replyAgentPermission(expectedId,requestId,permissionId,true); }
+            else replyAgentPermission(expectedId,requestId,permissionId,false);
+        }).create();
+        dialog.setCancelable(false);
+        dialog.setOnDismissListener(d->{ activeAgentPermissionDialog=null; interactionDialogOpen=false; });
+        activeAgentPermissionDialog=dialog; dialog.show();
+    }
+
+    private void replyAgentPermission(String expectedId,String requestId,String permissionId,boolean allow) {
+        api.replyAgentPermission(requestId,permissionId,allow,new ClosedCodeApi.Callback(){
+            @Override public void success(String body){
+                if(!expectedId.equals(currentSessionId)) return;
+                try{ JSONObject result=new JSONObject(body); if(!result.optBoolean("resolved",false)){ toolStatus.setText("Permission expired"); toast("That permission prompt expired before the reply arrived"); return; } }
+                catch(Exception e){ toolStatus.setText("Permission reply invalid"); toast("Agent permission returned an invalid response"); return; }
                 toolStatus.setText(allow ? "Agent tool allowed" : "Agent tool rejected");
             }
-            @Override public void failure(String message) {
-                if (!expectedId.equals(currentSessionId)) return;
-                toolStatus.setText("Permission reply failed");
-                toast("Agent permission: " + message);
-            }
+            @Override public void failure(String message){ if(!expectedId.equals(currentSessionId)) return; toolStatus.setText("Permission reply failed"); toast("Agent permission: "+message); }
         });
     }
 
