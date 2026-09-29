@@ -2,6 +2,37 @@
 
 **Timestamp:** 2026-09-17
 
+## Reconciled acceptance state — 2026-09-29
+
+The historical objective checklist below records the state at its 2026-09-20
+checkpoint. Later qualified work closed the apparent implementation gaps. The
+current release state is:
+
+- Android client, native provider boundary, durable sessions/transcripts,
+  streaming, cancellation, steering, project tools, long-horizon execution,
+  completion behavior, themes, notifications, and all three autonomy modes are
+  implemented and covered by the later qualification records.
+- The exact Full Access product implementation remains commit
+  `35151242eb27c4af4cf8f431663f5d614a4d4b25`; later commits on the branch are
+  governance, certification, and handoff records.
+- All nine current Android regression programs and a clean Android build were
+  rerun GREEN on 2026-09-29.
+- A fresh real-provider workflow completed through NVIDIA/Nemotron and exercised
+  inspect, failing test execution, diagnosis, targeted patching, successful test
+  execution, durable terminal completion, and exact token accounting. YOLO
+  continued to gate both shell invocations while workspace reads and patching
+  proceeded without prompts.
+- The immutable Op491 APK remains the release candidate. Engineering did not
+  install or overwrite it.
+- Remaining acceptance is physical-device-only: install Op491 manually, verify
+  Full Access warning/default/mutual exclusion/out-of-workspace behavior, verify
+  restoration of YOLO shell gating and ASK containment, repeat cold reopen, and
+  observe mid-run steering continuity on that exact build.
+
+Accordingly, unchecked boxes in the historical 2026-09-20 snapshot must not be
+read as current implementation defects. The only release gate still open is the
+explicit physical-device acceptance above.
+
 
 ## Status Update — 2026-09-28 — Temporary Test Pause / Codex Handoff
 
