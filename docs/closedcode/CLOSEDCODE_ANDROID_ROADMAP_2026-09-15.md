@@ -1,10 +1,17 @@
+> **STATUS: CLOSED / SUPERSEDED**
+>
+> Closed: 2026-09-17
+> Superseded by: `docs/closedcode/CLOSEDCODE_DELIVERY_AND_STABILIZATION_ROADMAP_2026-09-17.md`
+>
+> Historical record only; superseded on 2026-09-17.
+
 # ClosedCode Android Roadmap — 2026-09-15
 
 ## Phase 0 — Fork foundation
 - Preserve MIT license and upstream provenance.
 - Establish ClosedCode charter and Android-first scope.
 - Keep upstream `dev` available for comparison/sync.
-- Move active ClosedCode engineering onto a dedicated downstream branch before source modification.
+- Move ClosedCode engineering onto a dedicated downstream branch before source modification.
 
 ## Phase 1 — Reproduce known Android baseline
 - Reproduce OpenCode 1.18.31 behavior on Android/Bionic from the fork.
