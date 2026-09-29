@@ -2,6 +2,31 @@
 
 **Timestamp:** 2026-09-17
 
+
+## Status Update — 2026-09-28 — Temporary Test Pause / Codex Handoff
+
+Manual ClosedCode acceptance testing is temporarily **PAUSED** so the remaining update work can be finished with Codex.
+
+The authoritative handoff record is:
+
+`docs/closedcode/CLOSEDCODE_CODEX_HANDOFF_PAUSE_2026-09-28.md`
+
+Current pause point:
+
+- Heavy Engineer / Relay sequence is frozen after **Op491**.
+- Current branch: `closedcode/android-cleanroom-opencode-mobile-20260916`.
+- Current branch HEAD at handoff start: `af1684dc7b4cc63389d51fca1793f1cfc9b08b06`.
+- Last qualified product commit: `35151242eb27c4af4cf8f431663f5d614a4d4b25`.
+- Live ClosedCode backend at the last qualification point: **0.8.19**.
+- Latest immutable Full Access RC: `/sdcard/Download/ClosedCode-RC-0.2.7-full-access-op491.apk`.
+- Latest RC SHA-256: `0a87502c6d6f68a3faa1ffe8f3ff1f8c5e924c0ceb55e42a5f6ca64862b5c212`.
+- Device testing of that Full Access candidate is **pending**, not failed.
+- No open GitHub PR exists for this branch as of the handoff; the branch is the current PR candidate.
+
+Codex should continue from the existing qualified branch rather than rebuilding the implementation from scratch. Remaining work is limited to final physical/integrated acceptance, narrow repair of any demonstrated blockers, reconciliation of stale checklist/documentation state, and preparation of the actual PR to `dev`.
+
+The historical checklist below predates substantial later work. Use later audits, qualification records, and the 2026-09-28 handoff when determining current completion state rather than treating every unchecked historical box below as still open.
+
 ## Objective Checklist — 2026-09-20
 
 This checklist supplements the historical operation-range sections below. The historical ranges remain provenance; this checklist is the compact product-objective view for later Heavy Engineer reviews.
